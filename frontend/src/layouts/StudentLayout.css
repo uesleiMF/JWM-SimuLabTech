@@ -1,0 +1,32 @@
+.student-layout {
+  min-height: 100vh;
+  display: flex;
+  background: #f4f7fb;
+}
+
+.student-main {
+  flex: 1;
+  min-width: 0;
+  margin-left: 260px;
+}
+
+.student-content {
+  padding: 28px;
+  min-height: calc(100vh - 70px);
+}
+
+@media (max-width: 900px) {
+  .student-main {
+    margin-left: 0;
+  }
+
+  .student-content {
+    padding: 20px;
+  }
+}
+
+@media (max-width: 600px) {
+  .student-content {
+    padding: 16px;
+  }
+}

@@ -1,0 +1,1215 @@
+/* ==================================================
+   LABORATÓRIO
+================================================== */
+
+.laboratory-page {
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+/* ==================================================
+   HEADER
+================================================== */
+
+.laboratory-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 22px;
+}
+
+.laboratory-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+
+.laboratory-header h1 {
+  font-size: 30px;
+  line-height: 1.15;
+  color: #0f172a;
+  margin-bottom: 8px;
+}
+
+.laboratory-header p {
+  max-width: 720px;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.laboratory-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.laboratory-reset-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #334155;
+  padding: 11px 15px;
+  border-radius: 9px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.laboratory-reset-button:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.laboratory-reset-button:active {
+  transform: translateY(1px);
+}
+
+/* ==================================================
+   TOOLBAR
+================================================== */
+
+.laboratory-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 15px;
+  margin-bottom: 18px;
+  min-width: 0;
+}
+
+.toolbar-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  color: #64748b;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.toolbar-tool.active {
+  color: #1d4ed8;
+  background: #dbeafe;
+  border-color: #bfdbfe;
+}
+
+.toolbar-tool svg {
+  color: #2563eb;
+}
+
+.toolbar-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.toolbar-message {
+  min-width: 0;
+  flex: 1;
+  text-align: right;
+  color: #64748b;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.status-dot.active {
+  background: #22c55e;
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.12);
+}
+
+/* ==================================================
+   LAYOUT PRINCIPAL
+================================================== */
+
+.laboratory-layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+/* ==================================================
+   PAINEL DE COMPONENTES
+================================================== */
+
+.components-panel,
+.circuit-workspace {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+}
+
+.components-panel {
+  padding: 18px;
+}
+
+.panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 17px;
+}
+
+.panel-heading > div {
+  min-width: 0;
+}
+
+.panel-heading svg {
+  color: #64748b;
+}
+
+.panel-kicker {
+  display: block;
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+}
+
+.panel-heading h2 {
+  color: #0f172a;
+  font-size: 17px;
+}
+
+/* ==================================================
+   LISTA DE COMPONENTES
+================================================== */
+
+.component-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.component-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  padding: 11px;
+  border-radius: 9px;
+  transition: 0.2s ease;
+  cursor: pointer;
+  color: inherit;
+}
+
+.component-item:hover {
+  border-color: #93c5fd;
+  background: #f8fbff;
+  transform: translateY(-1px);
+}
+
+.component-item:active {
+  transform: translateY(0);
+}
+
+.component-item.selected {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.06);
+}
+
+.component-item-icon {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f1f5f9;
+  border-radius: 8px;
+  transition: 0.2s ease;
+}
+
+.component-item.selected .component-item-icon {
+  background: #dbeafe;
+}
+
+.component-item-content {
+  min-width: 0;
+  flex: 1;
+}
+
+.component-item-content strong {
+  display: block;
+  color: #334155;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+
+.component-item-content small {
+  display: block;
+  color: #94a3b8;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.component-item-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #2563eb;
+}
+
+/* ==================================================
+   CONTROLES
+================================================== */
+
+.resistor-control {
+  margin-top: 18px;
+  padding-top: 17px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.control-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.control-heading > div {
+  min-width: 0;
+}
+
+.control-heading span {
+  display: block;
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+
+.control-heading strong {
+  display: block;
+  color: #334155;
+  font-size: 13px;
+}
+
+.control-value {
+  color: #2563eb !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  letter-spacing: normal !important;
+  white-space: nowrap;
+}
+
+.delete-component-button {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #fecaca;
+  background: #fff1f2;
+  color: #dc2626;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.delete-component-button:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.input-with-unit {
+  display: flex;
+  align-items: stretch;
+  margin-top: 10px;
+}
+
+.input-with-unit input {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  border: 1px solid #e2e8f0;
+  border-right: 0;
+  border-radius: 7px 0 0 7px;
+  padding: 0 10px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+  outline: none;
+}
+
+.input-with-unit input:focus {
+  border-color: #93c5fd;
+  background: #ffffff;
+}
+
+.input-with-unit > span {
+  min-width: 45px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e2e8f0;
+  background: #f1f5f9;
+  color: #64748b;
+  border-radius: 0 7px 7px 0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.resistor-control input[type="range"] {
+  width: 100%;
+  margin: 5px 0 8px;
+  accent-color: #2563eb;
+  cursor: pointer;
+}
+
+.range-labels {
+  display: flex;
+  justify-content: space-between;
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+/* ==================================================
+   WORKSPACE
+================================================== */
+
+.circuit-workspace {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.workspace-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.workspace-header > div:first-child {
+  min-width: 0;
+}
+
+.workspace-header h2 {
+  margin-top: 4px;
+  color: #0f172a;
+  font-size: 19px;
+}
+
+.circuit-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* ==================================================
+   DIAGNÓSTICO
+================================================== */
+
+.diagnostic-card {
+  margin: 16px 20px 0;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  background: #f8fafc;
+}
+
+.diagnostic-icon {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+
+.diagnostic-card strong {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+.diagnostic-card p {
+  display: block;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.diagnostic-card.success {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.diagnostic-card.success .diagnostic-icon {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.diagnostic-card.warning {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.diagnostic-card.warning .diagnostic-icon {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.diagnostic-card.error {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.diagnostic-card.error .diagnostic-icon {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.diagnostic-card.info {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1e40af;
+}
+
+.diagnostic-card.info .diagnostic-icon {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+/* ==================================================
+   ÁREA DO CIRCUITO
+================================================== */
+
+.circuit-board {
+  position: relative;
+  min-height: 460px;
+  margin: 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background-color: #f8fafc;
+  overflow: hidden;
+}
+
+/*
+  A grade fica como camada visual.
+  Não bloqueia cliques nos componentes.
+*/
+
+.circuit-grid-background {
+  background-image:
+    linear-gradient(
+      rgba(148, 163, 184, 0.08) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      rgba(148, 163, 184, 0.08) 1px,
+      transparent 1px
+    );
+
+  background-size: 24px 24px;
+}
+
+/* ==================================================
+   COMPONENT NODE
+================================================== */
+
+.component-node {
+  position: absolute;
+  min-width: 120px;
+  min-height: 82px;
+
+  transform: translate(-50%, -50%);
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  gap: 5px;
+  padding: 10px 14px;
+
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+
+  background: rgba(255, 255, 255, 0.97);
+
+  color: #1e293b;
+
+  cursor: pointer;
+
+  box-shadow:
+    0 4px 12px rgba(15, 23, 42, 0.08);
+
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+
+  z-index: 10;
+
+  user-select: none;
+}
+
+.component-node:hover {
+  transform: translate(-50%, -50%) scale(1.04);
+  border-color: #2563eb;
+
+  box-shadow:
+    0 8px 22px rgba(37, 99, 235, 0.16);
+}
+
+.component-node:active {
+  cursor: grabbing;
+}
+
+.component-node.selected {
+  border-color: #2563eb;
+  background: #eff6ff;
+
+  box-shadow:
+    0 0 0 3px rgba(37, 99, 235, 0.14),
+    0 8px 22px rgba(37, 99, 235, 0.18);
+}
+
+.component-node.energized {
+  border-color: #f59e0b;
+  background: #fffbeb;
+
+  box-shadow:
+    0 0 0 3px rgba(245, 158, 11, 0.12),
+    0 8px 24px rgba(245, 158, 11, 0.2);
+}
+
+.component-node.energized.selected {
+  border-color: #2563eb;
+
+  box-shadow:
+    0 0 0 3px rgba(37, 99, 235, 0.18),
+    0 0 18px rgba(245, 158, 11, 0.25),
+    0 8px 24px rgba(37, 99, 235, 0.16);
+}
+
+.component-node-icon {
+  width: 38px;
+  height: 38px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: #2563eb;
+  border-radius: 10px;
+  background: #dbeafe;
+}
+
+.component-node.energized .component-node-icon {
+  color: #d97706;
+  background: #fef3c7;
+}
+
+.component-node strong {
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.component-node small {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1;
+}
+
+/* ==================================================
+   INDICADOR DE ENERGIA
+================================================== */
+
+.circuit-energy-indicator {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+
+  display: flex;
+  align-items: center;
+  gap: 7px;
+
+  padding: 7px 11px;
+
+  border-radius: 999px;
+
+  background: #ecfdf5;
+  border: 1px solid #bbf7d0;
+
+  color: #15803d;
+
+  font-size: 11px;
+  font-weight: 700;
+
+  z-index: 20;
+
+  pointer-events: none;
+}
+
+.circuit-energy-indicator .status-dot {
+  width: 8px;
+  height: 8px;
+  background: #22c55e;
+
+  box-shadow:
+    0 0 0 4px rgba(34, 197, 94, 0.12);
+
+  animation: circuitPulse 1.5s infinite;
+}
+
+@keyframes circuitPulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.45;
+    transform: scale(0.8);
+  }
+}
+
+/* ==================================================
+   MENSAGEM DA ÁREA DE MONTAGEM
+================================================== */
+
+.circuit-board > .laboratory-message {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+
+  transform: translate(-50%, -50%);
+
+  width: min(360px, calc(100% - 40px));
+
+  margin: 0;
+
+  padding: 20px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  gap: 8px;
+
+  text-align: center;
+
+  border: 1px solid #dbeafe;
+  background: rgba(239, 246, 255, 0.96);
+
+  border-radius: 12px;
+
+  color: #1d4ed8;
+
+  font-size: 12px;
+
+  z-index: 5;
+}
+
+.circuit-board > .laboratory-message strong {
+  font-size: 14px;
+}
+
+.circuit-board > .laboratory-message span {
+  color: #64748b;
+}
+
+/* ==================================================
+   CONTROLE DO INTERRUPTOR
+================================================== */
+
+.experiment-card {
+  margin: 15px 20px 0;
+  padding: 15px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 20px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+
+  background: #ffffff;
+}
+
+.experiment-card > div {
+  min-width: 0;
+}
+
+.experiment-card h3 {
+  color: #334155;
+  font-size: 14px;
+  margin: 6px 0;
+}
+
+.experiment-card p {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.switch-control-button {
+  min-width: 125px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 8px;
+
+  padding: 10px 14px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+
+  background: #f8fafc;
+  color: #475569;
+
+  font-size: 12px;
+  font-weight: 800;
+
+  cursor: pointer;
+
+  transition: 0.2s ease;
+}
+
+.switch-control-button:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.switch-control-button.on {
+  border-color: #86efac;
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.switch-control-button.on:hover {
+  background: #bbf7d0;
+}
+
+/* ==================================================
+   MEDIÇÕES
+================================================== */
+
+.measurements-panel {
+  margin: 18px 20px 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.measurements-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  margin-bottom: 12px;
+}
+
+.measurements-heading svg {
+  color: #2563eb;
+}
+
+.measurements-heading h2 {
+  color: #0f172a;
+  font-size: 17px;
+}
+
+.measurements-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.measurement-card {
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+
+  gap: 5px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+
+  padding: 13px;
+
+  background: #f8fafc;
+
+  transition: 0.2s ease;
+}
+
+.measurement-card:hover {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.measurement-card span {
+  display: block;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.measurement-card strong {
+  color: #0f172a;
+  font-size: 19px;
+  line-height: 1.1;
+}
+
+.measurement-card small {
+  color: #64748b;
+  font-size: 11px;
+}
+
+/* ==================================================
+   LEI DE OHM
+================================================== */
+
+.ohm-card {
+  margin: 15px 20px 20px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 20px;
+
+  padding: 15px;
+
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+
+  background: #eff6ff;
+}
+
+.ohm-card h2 {
+  color: #1e3a8a;
+  font-size: 15px;
+  margin: 5px 0;
+}
+
+.ohm-card p {
+  color: #3b82f6;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.formula {
+  flex-shrink: 0;
+
+  padding: 11px 16px;
+
+  border-radius: 8px;
+
+  background: #dbeafe;
+
+  color: #1e3a8a;
+
+  font-size: 18px;
+  font-weight: 800;
+
+  font-family:
+    "Courier New",
+    monospace;
+}
+
+/* ==================================================
+   ELEMENTOS ANTIGOS
+   Mantidos para compatibilidade
+================================================== */
+
+.circuit-source,
+.resistor-symbol,
+.switch-symbol,
+.circuit-lamp,
+.wire,
+.wire-top,
+.wire-bottom {
+  display: none;
+}
+
+/* ==================================================
+   RESPONSIVIDADE
+================================================== */
+
+@media (max-width: 1200px) {
+  .laboratory-layout {
+    grid-template-columns: 230px minmax(0, 1fr);
+  }
+
+  .measurements-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .laboratory-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .components-panel {
+    width: 100%;
+  }
+
+  .component-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .measurements-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 800px) {
+  .laboratory-header {
+    flex-direction: column;
+  }
+
+  .laboratory-header-actions {
+    width: 100%;
+  }
+
+  .laboratory-reset-button {
+    width: 100%;
+  }
+
+  .laboratory-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .toolbar-message {
+    width: 100%;
+    text-align: left;
+  }
+
+  .circuit-board {
+    min-height: 400px;
+  }
+
+  .experiment-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .switch-control-button {
+    width: 100%;
+  }
+
+  .ohm-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .formula {
+    width: 100%;
+    text-align: center;
+  }
+}
+
+@media (max-width: 600px) {
+  .component-list {
+    grid-template-columns: 1fr;
+  }
+
+  .measurements-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .component-node {
+    min-width: 100px;
+    min-height: 72px;
+    padding: 8px 10px;
+  }
+
+  .component-node-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .component-node-icon svg {
+    width: 21px;
+    height: 21px;
+  }
+
+  .component-node strong {
+    font-size: 11px;
+  }
+
+  .component-node small {
+    font-size: 9px;
+  }
+}
+
+@media (max-width: 450px) {
+  .laboratory-header h1 {
+    font-size: 24px;
+  }
+
+  .components-panel {
+    padding: 14px;
+  }
+
+  .workspace-header {
+    padding: 15px;
+
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .circuit-board {
+    min-height: 360px;
+    margin: 12px;
+  }
+
+  .diagnostic-card {
+    margin-left: 12px;
+    margin-right: 12px;
+  }
+
+  .measurements-panel {
+    margin-left: 12px;
+    margin-right: 12px;
+  }
+
+  .experiment-card {
+    margin-left: 12px;
+    margin-right: 12px;
+  }
+
+  .ohm-card {
+    margin-left: 12px;
+    margin-right: 12px;
+    margin-bottom: 12px;
+  }
+
+  .measurements-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .component-node {
+    min-width: 88px;
+    min-height: 64px;
+    padding: 6px 7px;
+  }
+
+  .component-node-icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .component-node-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .component-node strong {
+    font-size: 10px;
+  }
+
+  .component-node small {
+    font-size: 8px;
+  }
+
+  .circuit-energy-indicator {
+    top: 8px;
+    right: 8px;
+    font-size: 9px;
+    padding: 6px 8px;
+  }
+}
+
+/* ==================================================
+   ACESSIBILIDADE
+================================================== */
+
+.component-item:focus-visible,
+.laboratory-reset-button:focus-visible,
+.switch-control-button:focus-visible,
+.delete-component-button:focus-visible,
+.component-node:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.25);
+  outline-offset: 2px;
+}
+
+/* ==================================================
+   REDUÇÃO DE MOVIMENTO
+================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

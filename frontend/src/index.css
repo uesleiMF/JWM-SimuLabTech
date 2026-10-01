@@ -1,0 +1,116 @@
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+
+  font-family:
+    Inter,
+    "Segoe UI",
+    Roboto,
+    Arial,
+    sans-serif;
+
+  background: #f5f8fc;
+
+  color: #172033;
+
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid #1685ff;
+
+  outline-offset: 2px;
+}
+
+a {
+  color: inherit;
+
+  text-decoration: none;
+}
+
+img {
+  max-width: 100%;
+
+  display: block;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.app {
+  min-height: 100vh;
+
+  display: flex;
+
+  background: #f5f8fc;
+}
+
+.main-area {
+  min-width: 0;
+
+  flex: 1;
+
+  display: flex;
+  flex-direction: column;
+}
+
+.content {
+  width: 100%;
+
+  padding: 18px 20px 0;
+}
+
+::selection {
+  background: #1685ff;
+  color: white;
+}
+
+/* Scrollbar global */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #eef3f8;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c3cfdd;
+
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #aab8c8;
+}
+
+/* Responsivo */
+
+@media (max-width: 700px) {
+  .content {
+    padding: 14px 12px 0;
+  }
+}
