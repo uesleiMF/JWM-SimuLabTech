@@ -1,4 +1,9 @@
-import { useMemo, useState } from "react";
+import {
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
 import {
   Activity,
   Battery,
@@ -28,7 +33,14 @@ import {
   removeComponent,
   selectComponent,
   updateComponent,
+  updateComponentPosition,
 } from "../../simulator/circuitActions";
+
+import {
+  createElectricalConnection,
+  createTerminalKey,
+} from "../../simulator/connections/connectionUtils";
+
 
 const iconMap = {
   [COMPONENT_TYPES.SOURCE]: Battery,
@@ -42,73 +54,339 @@ const iconMap = {
 function createInitialCircuit() {
   return {
     ...defaultCircuit,
-    components: defaultCircuit.components.map((component) => ({
-      ...component,
-      position: {
-        ...component.position,
-      },
-    })),
-    wires: defaultCircuit.wires.map((wire) => ({
-      ...wire,
-    })),
+
+    components:
+      defaultCircuit.components.map(
+        (component) => ({
+          ...component,
+
+          position: {
+            ...component.position,
+          },
+        })
+      ),
+
+    wires:
+      defaultCircuit.wires.map(
+        (wire) => ({
+          ...wire,
+        })
+      ),
+
     selectedComponent: null,
   };
 }
 
 export default function Laboratory() {
-  const [circuit, setCircuit] = useState(createInitialCircuit);
-  const [message, setMessage] = useState(
-    "Monte e teste seu circuito elétrico."
-  );
+  const [circuit, setCircuit] =
+    useState(createInitialCircuit);
+
+  const [message, setMessage] =
+    useState(
+      "Monte e teste seu circuito elétrico."
+    );
+
+  /*
+   * ==================================================
+   * CONEXÃO TEMPORÁRIA
+   * ==================================================
+   *
+   * Guarda o terminal de origem enquanto o usuário
+   * está puxando um fio.
+   *
+   * Exemplo:
+   *
+   * {
+   *   componentId: "source-1",
+   *   terminalId: "positive"
+   * }
+   */
+
+  const [
+    connectionStart,
+    setConnectionStart,
+  ] = useState(null);
+
+  /*
+   * ==================================================
+   * REFERÊNCIA DO QUADRO
+   * ==================================================
+   */
+
+  const boardRef =
+    useRef(null);
 
   const simulation = useMemo(
     () => simulateCircuit(circuit),
     [circuit]
   );
 
-  const source = circuit.components.find(
-    (component) =>
-      component.type === COMPONENT_TYPES.SOURCE
-  );
+  const source =
+    circuit.components.find(
+      (component) =>
+        component.type ===
+        COMPONENT_TYPES.SOURCE
+    );
 
-  const resistor = circuit.components.find(
-    (component) =>
-      component.type === COMPONENT_TYPES.RESISTOR
-  );
+  const resistor =
+    circuit.components.find(
+      (component) =>
+        component.type ===
+        COMPONENT_TYPES.RESISTOR
+    );
 
-  const switchComponent = circuit.components.find(
-    (component) =>
-      component.type === COMPONENT_TYPES.SWITCH
-  );
+  const switchComponent =
+    circuit.components.find(
+      (component) =>
+        component.type ===
+        COMPONENT_TYPES.SWITCH
+    );
 
-  const lamp = circuit.components.find(
-    (component) =>
-      component.type === COMPONENT_TYPES.LAMP
-  );
+  const lamp =
+    circuit.components.find(
+      (component) =>
+        component.type ===
+        COMPONENT_TYPES.LAMP
+    );
 
-  const selectedComponent = circuit.components.find(
-    (component) =>
-      component.id === circuit.selectedComponent
-  );
+  const selectedComponent =
+    circuit.components.find(
+      (component) =>
+        component.id ===
+        circuit.selectedComponent
+    );
 
   const switchOn =
     switchComponent?.value === true;
 
-  const handleSelectComponent = (componentId) => {
+  /*
+   * ==================================================
+   * SELECIONAR COMPONENTE
+   * ==================================================
+   */
+
+  const handleSelectComponent = (
+    componentId
+  ) => {
     setCircuit((current) =>
-      selectComponent(current, componentId)
+      selectComponent(
+        current,
+        componentId
+      )
     );
   };
 
-  const handleAddOrRemoveComponent = (catalogItem) => {
-    const existing = circuit.components.find(
-      (component) =>
-        component.type === catalogItem.id
+  /*
+   * ==================================================
+   * ARRASTAR COMPONENTE
+   * ==================================================
+   */
+
+  const handleStartDrag = (
+    event,
+    component
+  ) => {
+    const board =
+      boardRef.current;
+
+    if (!board) {
+      return;
+    }
+
+    const componentElement =
+      event.currentTarget;
+
+    const componentRect =
+      componentElement.getBoundingClientRect();
+
+    const boardRect =
+      board.getBoundingClientRect();
+
+    const componentWidth =
+      componentRect.width;
+
+    const componentHeight =
+      componentRect.height;
+
+    const offsetX =
+      event.clientX -
+      componentRect.left;
+
+    const offsetY =
+      event.clientY -
+      componentRect.top;
+
+    const handleMouseMove = (
+      moveEvent
+    ) => {
+      const currentBoard =
+        boardRef.current;
+
+      if (!currentBoard) {
+        return;
+      }
+
+      const rect =
+        currentBoard.getBoundingClientRect();
+
+      let x =
+        moveEvent.clientX -
+        rect.left -
+        offsetX;
+
+      let y =
+        moveEvent.clientY -
+        rect.top -
+        offsetY;
+
+      const maxX =
+        Math.max(
+          0,
+          rect.width -
+            componentWidth
+        );
+
+      const maxY =
+        Math.max(
+          0,
+          rect.height -
+            componentHeight
+        );
+
+      x = Math.max(
+        0,
+        Math.min(x, maxX)
+      );
+
+      y = Math.max(
+        0,
+        Math.min(y, maxY)
+      );
+
+      setCircuit((current) =>
+        updateComponentPosition(
+          current,
+          component.id,
+          {
+            x,
+            y,
+          }
+        )
+      );
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener(
+        "mousemove",
+        handleMouseMove
+      );
+
+      document.removeEventListener(
+        "mouseup",
+        handleMouseUp
+      );
+    };
+
+    document.addEventListener(
+      "mousemove",
+      handleMouseMove
     );
+
+    document.addEventListener(
+      "mouseup",
+      handleMouseUp
+    );
+  };
+
+  /*
+   * ==================================================
+   * INICIAR CONEXÃO
+   * ==================================================
+   *
+   * Chamado pelo ComponentNode quando o usuário
+   * pressiona um terminal.
+   */
+
+  const handleStartConnection = (
+    event,
+    component,
+    terminal
+  ) => {
+    if (!component || !terminal) {
+      return;
+    }
+
+    const terminalKey =
+      createTerminalKey(
+        component.id,
+        terminal.id
+      );
+
+    if (!terminalKey) {
+      return;
+    }
+
+    setConnectionStart({
+      componentId:
+        component.id,
+
+      terminalId:
+        terminal.id,
+
+      terminalType:
+        terminal.type,
+
+      terminalPosition:
+        terminal.position,
+
+      terminalKey,
+    });
+
+    setMessage(
+      `Conexão iniciada em ${component.name} — terminal ${terminal.label}.`
+    );
+  };
+
+  /*
+   * ==================================================
+   * CANCELAR CONEXÃO
+   * ==================================================
+   */
+
+  const cancelConnection = () => {
+    if (!connectionStart) {
+      return;
+    }
+
+    setConnectionStart(null);
+
+    setMessage(
+      "Conexão cancelada."
+    );
+  };
+
+  /*
+   * ==================================================
+   * ADICIONAR / REMOVER COMPONENTE
+   * ==================================================
+   */
+
+  const handleAddOrRemoveComponent = (
+    catalogItem
+  ) => {
+    const existing =
+      circuit.components.find(
+        (component) =>
+          component.type ===
+          catalogItem.id
+      );
 
     if (existing) {
       setCircuit((current) =>
-        removeComponent(current, existing.id)
+        removeComponent(
+          current,
+          existing.id
+        )
       );
 
       setMessage(
@@ -119,7 +397,10 @@ export default function Laboratory() {
     }
 
     setCircuit((current) =>
-      addComponent(current, catalogItem)
+      addComponent(
+        current,
+        catalogItem
+      )
     );
 
     setMessage(
@@ -127,25 +408,57 @@ export default function Laboratory() {
     );
   };
 
+  /*
+   * ==================================================
+   * CLICAR NO QUADRO
+   * ==================================================
+   */
+
   const handleBoardClick = () => {
+    if (connectionStart) {
+      cancelConnection();
+      return;
+    }
+
     setCircuit((current) => ({
       ...current,
       selectedComponent: null,
     }));
   };
 
+  /*
+   * ==================================================
+   * RESET
+   * ==================================================
+   */
+
   const handleReset = () => {
-    setCircuit(createInitialCircuit());
+    setCircuit(
+      createInitialCircuit()
+    );
+
+    setConnectionStart(null);
 
     setMessage(
       "Laboratório restaurado ao circuito inicial."
     );
   };
 
-  const handleResistanceChange = (event) => {
-    const value = Number(event.target.value);
+  /*
+   * ==================================================
+   * RESISTÊNCIA
+   * ==================================================
+   */
 
-    if (!resistor) return;
+  const handleResistanceChange = (
+    event
+  ) => {
+    const value =
+      Number(event.target.value);
+
+    if (!resistor) {
+      return;
+    }
 
     setCircuit((current) =>
       updateComponent(
@@ -158,15 +471,24 @@ export default function Laboratory() {
     );
   };
 
+  /*
+   * ==================================================
+   * INTERRUPTOR
+   * ==================================================
+   */
+
   const handleSwitchToggle = () => {
-    if (!switchComponent) return;
+    if (!switchComponent) {
+      return;
+    }
 
     setCircuit((current) =>
       updateComponent(
         current,
         switchComponent.id,
         {
-          value: !switchComponent.value,
+          value:
+            !switchComponent.value,
         }
       )
     );
@@ -178,10 +500,21 @@ export default function Laboratory() {
     );
   };
 
-  const handleSelectedValueChange = (event) => {
-    if (!selectedComponent) return;
+  /*
+   * ==================================================
+   * VALOR DO COMPONENTE SELECIONADO
+   * ==================================================
+   */
 
-    const value = Number(event.target.value);
+  const handleSelectedValueChange = (
+    event
+  ) => {
+    if (!selectedComponent) {
+      return;
+    }
+
+    const value =
+      Number(event.target.value);
 
     setCircuit((current) =>
       updateComponent(
@@ -194,11 +527,20 @@ export default function Laboratory() {
     );
   };
 
+  /*
+   * ==================================================
+   * DIAGNÓSTICO
+   * ==================================================
+   */
+
   const diagnostic = useMemo(() => {
     if (!source) {
       return {
         type: "warning",
-        title: "Fonte não encontrada",
+
+        title:
+          "Fonte não encontrada",
+
         description:
           "Adicione uma fonte DC para alimentar o circuito.",
       };
@@ -207,7 +549,10 @@ export default function Laboratory() {
     if (!resistor) {
       return {
         type: "warning",
-        title: "Resistor não encontrado",
+
+        title:
+          "Resistor não encontrado",
+
         description:
           "Adicione um resistor para limitar a corrente.",
       };
@@ -216,18 +561,25 @@ export default function Laboratory() {
     if (!switchComponent) {
       return {
         type: "warning",
-        title: "Interruptor não encontrado",
+
+        title:
+          "Interruptor não encontrado",
+
         description:
           "Adicione um interruptor para controlar o circuito.",
       };
     }
 
     if (
-      Number(resistor.value) <= 0
+      Number(resistor.value) <=
+      0
     ) {
       return {
         type: "error",
-        title: "Resistência inválida",
+
+        title:
+          "Resistência inválida",
+
         description:
           "A resistência precisa ser maior que zero.",
       };
@@ -236,16 +588,24 @@ export default function Laboratory() {
     if (!switchOn) {
       return {
         type: "info",
-        title: "Circuito desligado",
+
+        title:
+          "Circuito desligado",
+
         description:
           "Feche o interruptor para permitir a passagem de corrente.",
       };
     }
 
-    if (!simulation.energized) {
+    if (
+      !simulation.energized
+    ) {
       return {
         type: "warning",
-        title: "Circuito não energizado",
+
+        title:
+          "Circuito não energizado",
+
         description:
           "Verifique a fonte e as conexões do circuito.",
       };
@@ -253,7 +613,10 @@ export default function Laboratory() {
 
     return {
       type: "success",
-      title: "Circuito energizado",
+
+      title:
+        "Circuito energizado",
+
       description:
         "A corrente está circulando pelo circuito.",
     };
@@ -273,11 +636,14 @@ export default function Laboratory() {
   };
 
   const DiagnosticIcon =
-    diagnosticIcon[diagnostic.type];
+    diagnosticIcon[
+      diagnostic.type
+    ];
 
   return (
     <div className="laboratory-page">
       {/* HEADER */}
+
       <header className="laboratory-header">
         <div>
           <span className="laboratory-eyebrow">
@@ -289,8 +655,9 @@ export default function Laboratory() {
           </h1>
 
           <p>
-            Monte, configure e teste seus circuitos
-            elétricos de forma interativa.
+            Monte, configure e teste seus
+            circuitos elétricos de forma
+            interativa.
           </p>
         </div>
 
@@ -308,6 +675,7 @@ export default function Laboratory() {
       </header>
 
       {/* TOOLBAR */}
+
       <section className="laboratory-toolbar">
         <div className="toolbar-tool active">
           <MousePointer2 size={18} />
@@ -334,12 +702,15 @@ export default function Laboratory() {
         </div>
 
         <div className="toolbar-message">
-          {message}
+          {connectionStart
+            ? "Arraste até outro terminal para conectar."
+            : message}
         </div>
       </section>
 
       <div className="laboratory-layout">
         {/* COMPONENTES */}
+
         <aside className="components-panel">
           <div className="panel-heading">
             <div>
@@ -373,7 +744,9 @@ export default function Laboratory() {
                 return (
                   <button
                     type="button"
-                    key={catalogItem.id}
+                    key={
+                      catalogItem.id
+                    }
                     className={`component-item ${
                       exists
                         ? "selected"
@@ -397,11 +770,15 @@ export default function Laboratory() {
 
                     <span className="component-item-content">
                       <strong>
-                        {catalogItem.name}
+                        {
+                          catalogItem.name
+                        }
                       </strong>
 
                       <small>
-                        {catalogItem.description}
+                        {
+                          catalogItem.description
+                        }
                       </small>
                     </span>
 
@@ -418,6 +795,7 @@ export default function Laboratory() {
           </div>
 
           {/* COMPONENTE SELECIONADO */}
+
           {selectedComponent && (
             <div className="resistor-control">
               <div className="control-heading">
@@ -427,7 +805,9 @@ export default function Laboratory() {
                   </span>
 
                   <strong>
-                    {selectedComponent.name}
+                    {
+                      selectedComponent.name
+                    }
                   </strong>
                 </div>
 
@@ -435,11 +815,12 @@ export default function Laboratory() {
                   type="button"
                   className="delete-component-button"
                   onClick={() => {
-                    setCircuit((current) =>
-                      removeComponent(
-                        current,
-                        selectedComponent.id
-                      )
+                    setCircuit(
+                      (current) =>
+                        removeComponent(
+                          current,
+                          selectedComponent.id
+                        )
                     );
 
                     setMessage(
@@ -471,7 +852,9 @@ export default function Laboratory() {
                     />
 
                     <span>
-                      {selectedComponent.unit}
+                      {
+                        selectedComponent.unit
+                      }
                     </span>
                   </div>
                 </label>
@@ -480,6 +863,7 @@ export default function Laboratory() {
           )}
 
           {/* RESISTOR */}
+
           {resistor && (
             <div className="resistor-control">
               <div className="control-heading">
@@ -503,7 +887,9 @@ export default function Laboratory() {
                 min="10"
                 max="500"
                 step="10"
-                value={resistor.value}
+                value={
+                  resistor.value
+                }
                 onChange={
                   handleResistanceChange
                 }
@@ -523,6 +909,7 @@ export default function Laboratory() {
         </aside>
 
         {/* WORKSPACE */}
+
         <main className="circuit-workspace">
           <div className="workspace-header">
             <div>
@@ -551,6 +938,7 @@ export default function Laboratory() {
           </div>
 
           {/* DIAGNÓSTICO */}
+
           <div
             className={`diagnostic-card ${diagnostic.type}`}
           >
@@ -572,9 +960,13 @@ export default function Laboratory() {
           </div>
 
           {/* QUADRO */}
+
           <div
+            ref={boardRef}
             className="circuit-board circuit-grid-background"
-            onClick={handleBoardClick}
+            onClick={
+              handleBoardClick
+            }
           >
             {circuit.components.map(
               (component) => (
@@ -601,12 +993,18 @@ export default function Laboratory() {
                   onSelect={
                     handleSelectComponent
                   }
+                  onStartDrag={
+                    handleStartDrag
+                  }
+                  onStartConnection={
+                    handleStartConnection
+                  }
                 />
               )
             )}
 
-            {circuit.components.length ===
-              0 && (
+            {circuit.components
+              .length === 0 && (
               <div className="laboratory-message">
                 <Zap size={28} />
 
@@ -622,6 +1020,7 @@ export default function Laboratory() {
             )}
 
             {/* INDICADOR DE ENERGIA */}
+
             {simulation.energized && (
               <div className="circuit-energy-indicator">
                 <span className="status-dot active" />
@@ -632,6 +1031,7 @@ export default function Laboratory() {
           </div>
 
           {/* CONTROLE DO INTERRUPTOR */}
+
           {switchComponent && (
             <div className="experiment-card">
               <div>
@@ -645,7 +1045,8 @@ export default function Laboratory() {
 
                 <p>
                   Abra ou feche o circuito para
-                  observar o comportamento da corrente.
+                  observar o comportamento da
+                  corrente.
                 </p>
               </div>
 
@@ -670,6 +1071,7 @@ export default function Laboratory() {
           )}
 
           {/* MEDIÇÕES */}
+
           <section className="measurements-panel">
             <div className="measurements-heading">
               <div>
@@ -729,6 +1131,7 @@ export default function Laboratory() {
           </section>
 
           {/* LEI DE OHM */}
+
           <section className="ohm-card">
             <div>
               <span className="panel-kicker">
