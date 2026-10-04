@@ -125,6 +125,44 @@ export function getComponentTerminals(component) {
       ];
 
     /**
+     * CAPACITOR
+     */
+    case COMPONENT_TYPES.CAPACITOR:
+      return [
+        {
+          id: "input",
+          type: TERMINAL_TYPES.INPUT,
+          label: "A",
+          position: "left",
+        },
+        {
+          id: "output",
+          type: TERMINAL_TYPES.OUTPUT,
+          label: "B",
+          position: "right",
+        },
+      ];
+
+    /**
+     * INDUTOR
+     */
+    case COMPONENT_TYPES.INDUCTOR:
+      return [
+        {
+          id: "input",
+          type: TERMINAL_TYPES.INPUT,
+          label: "A",
+          position: "left",
+        },
+        {
+          id: "output",
+          type: TERMINAL_TYPES.OUTPUT,
+          label: "B",
+          position: "right",
+        },
+      ];
+
+    /**
      * PADRÃO
      */
     default:

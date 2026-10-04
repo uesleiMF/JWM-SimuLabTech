@@ -33,6 +33,28 @@ export const componentCatalog = [
   },
 
   {
+    id: COMPONENT_TYPES.CAPACITOR,
+    name: "Capacitor",
+    description: "Armazena energia no campo elétrico",
+    category: "passivos",
+    icon: CircleDot,
+    color: "#06b6d4",
+    defaultValue: 100,
+    unit: "µF",
+  },
+
+  {
+    id: COMPONENT_TYPES.INDUCTOR,
+    name: "Indutor",
+    description: "Armazena energia no campo magnético",
+    category: "passivos",
+    icon: Zap,
+    color: "#8b5cf6",
+    defaultValue: 100,
+    unit: "mH",
+  },
+
+  {
     id: COMPONENT_TYPES.SWITCH,
     name: "Interruptor",
     description: "Controla a passagem de corrente",

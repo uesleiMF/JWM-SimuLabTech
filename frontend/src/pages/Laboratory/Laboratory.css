@@ -11,6 +11,7 @@
   min-width: 0;
 }
 
+
 /* ==================================================
    HEADER
 ================================================== */
@@ -87,6 +88,7 @@
   transform: translateY(1px);
 }
 
+
 /* ==================================================
    TOOLBAR
 ================================================== */
@@ -101,8 +103,7 @@
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   background: #ffffff;
-  box-shadow:
-    0 2px 8px rgba(15, 23, 42, 0.03);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
   box-sizing: border-box;
   min-width: 0;
 }
@@ -147,6 +148,7 @@
   text-overflow: ellipsis;
 }
 
+
 /* ==================================================
    STATUS DOT
 ================================================== */
@@ -161,9 +163,9 @@
 
 .status-dot.active {
   background: #22c55e;
-  box-shadow:
-    0 0 0 4px rgba(34, 197, 94, 0.12);
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.12);
 }
+
 
 /* ==================================================
    LAYOUT PRINCIPAL
@@ -184,6 +186,7 @@
   min-width: 0;
 }
 
+
 /* ==================================================
    PAINEL DE COMPONENTES
 ================================================== */
@@ -196,8 +199,7 @@
   border: 1px solid #dbe4ef;
   border-radius: 16px;
   background: #ffffff;
-  box-shadow:
-    0 4px 18px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
 }
 
 .panel-heading {
@@ -229,6 +231,7 @@
   line-height: 1.2;
   font-weight: 800;
 }
+
 
 /* ==================================================
    LISTA DE COMPONENTES
@@ -264,16 +267,14 @@
 .component-item:hover {
   border-color: #bfdbfe;
   background: #f8fbff;
-  box-shadow:
-    0 4px 12px rgba(37, 99, 235, 0.06);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.06);
   transform: translateY(-1px);
 }
 
 .component-item.selected {
   border-color: #93c5fd;
   background: #eff6ff;
-  box-shadow:
-    0 0 0 1px rgba(37, 99, 235, 0.08);
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.08);
 }
 
 .component-item-icon {
@@ -317,6 +318,7 @@
   flex: 0 0 auto;
   color: #2563eb;
 }
+
 
 /* ==================================================
    CONTROLE DO COMPONENTE
@@ -405,6 +407,7 @@
   font-weight: 700;
 }
 
+
 /* ==================================================
    RANGE
 ================================================== */
@@ -425,21 +428,26 @@
   font-size: 10px;
 }
 
+
 /* ==================================================
    BOTÃO EXCLUIR COMPONENTE
 ================================================== */
 
 .delete-component-button {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
+  gap: 6px;
+  min-width: 32px;
   height: 32px;
-  flex: 0 0 32px;
+  padding: 0 10px;
+  flex: 0 0 auto;
   border: 1px solid #fecaca;
   border-radius: 8px;
   background: #fff7f7;
   color: #ef4444;
+  font-size: 12px;
+  font-weight: 700;
   cursor: pointer;
   transition:
     background 0.2s ease,
@@ -447,11 +455,20 @@
     color 0.2s ease;
 }
 
+.selected-component-panel {
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  background: #eff6ff;
+}
+
 .delete-component-button:hover {
   background: #fee2e2;
   border-color: #fca5a5;
   color: #dc2626;
 }
+
 
 /* ==================================================
    WORKSPACE
@@ -484,6 +501,7 @@
   font-size: 12px;
   font-weight: 800;
 }
+
 
 /* ==================================================
    DIAGNÓSTICO
@@ -554,6 +572,7 @@
   line-height: 1.5;
 }
 
+
 /* ==================================================
    QUADRO DO CIRCUITO
 ================================================== */
@@ -564,21 +583,16 @@
   min-width: 0;
   min-height: 560px;
   box-sizing: border-box;
-
-  /*
-   * O quadro continua controlando os limites
-   * externos do laboratório.
-   */
   overflow: hidden;
-
   border: 1px solid #dbe4ef;
   border-radius: 18px;
   background-color: #f8fafc;
   isolation: isolate;
 }
 
+
 /* ==================================================
-   ÁREA INTERNA DO QUADRO
+   CAMADA INTERNA
 ================================================== */
 
 .circuit-board::before {
@@ -588,6 +602,7 @@
   pointer-events: none;
   z-index: 0;
 }
+
 
 /* ==================================================
    FUNDO DE GRADE
@@ -610,6 +625,24 @@
   background-size: 20px 20px;
 }
 
+
+/* ==================================================
+   CAMADA DE CONEXÕES
+================================================== */
+
+.connection-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 2;
+  pointer-events: none;
+  overflow: visible;
+  box-sizing: border-box;
+}
+
+
 /* ==================================================
    COMPONENTES DENTRO DO QUADRO
 ================================================== */
@@ -619,6 +652,7 @@
 
   width: 145px;
   height: 116px;
+
   min-width: 145px;
   min-height: 116px;
 
@@ -642,13 +676,6 @@
   cursor: grab;
   user-select: none;
 
-  /*
-   * IMPORTANTE:
-   * Os terminais ficam parcialmente para fora
-   * do componente.
-   *
-   * Nunca usar overflow: hidden aqui.
-   */
   overflow: visible;
 
   z-index: 5;
@@ -658,7 +685,8 @@
   transition:
     box-shadow 0.18s ease,
     border-color 0.18s ease,
-    background-color 0.18s ease;
+    background-color 0.18s ease,
+    transform 0.18s ease;
 }
 
 .component-node:hover {
@@ -695,8 +723,9 @@
     0 12px 28px rgba(245, 158, 11, 0.16);
 }
 
+
 /* ==================================================
-   ELEMENTOS INTERNOS DO COMPONENTE
+   ELEMENTOS INTERNOS
 ================================================== */
 
 .component-node > * {
@@ -708,11 +737,6 @@
   max-width: 100%;
   flex: 0 0 auto;
 }
-
-/*
- * O conteúdo normal do componente não deve
- * interferir na área externa dos terminais.
- */
 
 .component-node-icon {
   display: flex;
@@ -726,19 +750,14 @@
   display: block;
   max-width: 100%;
   margin-top: 5px;
-
   color: #1e293b;
-
   font-size: 12px;
   font-weight: 800;
-
   line-height: 1.25;
   text-align: center;
-
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-
   pointer-events: none;
 }
 
@@ -746,21 +765,17 @@
   display: block;
   max-width: 100%;
   margin-top: 3px;
-
   color: #64748b;
-
   font-size: 10px;
   font-weight: 700;
-
   line-height: 1.2;
-
   text-align: center;
-
   pointer-events: none;
 }
 
+
 /* ==================================================
-   TERMINAIS DOS COMPONENTES
+   TERMINAIS
 ================================================== */
 
 .component-terminal {
@@ -777,29 +792,13 @@
 
   transform: translateY(-50%);
 
-  /*
-   * Terminal acima do conteúdo do componente.
-   */
   z-index: 50;
 
-  /*
-   * O terminal poderá futuramente receber
-   * interação de conexão.
-   */
   cursor: crosshair;
-
-  /*
-   * Garante que o terminal possa receber
-   * o clique mesmo sobre o componente.
-   */
   pointer-events: auto;
 
   box-sizing: border-box;
 }
-
-/* ==================================================
-   POSIÇÃO DOS TERMINAIS
-================================================== */
 
 .component-terminal-left {
   left: -14px;
@@ -808,6 +807,7 @@
 .component-terminal-right {
   right: -14px;
 }
+
 
 /* ==================================================
    PONTO DO TERMINAL
@@ -843,10 +843,6 @@
     border-color 0.15s ease;
 }
 
-/* ==================================================
-   HOVER DO TERMINAL
-================================================== */
-
 .component-terminal:hover .component-terminal-dot {
   transform: scale(1.25);
 
@@ -858,17 +854,13 @@
     0 3px 10px rgba(15, 23, 42, 0.2);
 }
 
-/* ==================================================
-   TERMINAL DO COMPONENTE SELECIONADO
-================================================== */
-
 .component-node.selected .component-terminal-dot {
   border-color: #1d4ed8;
 }
 
+
 /* ==================================================
-   ESTADO DE TERMINAL ATIVO
-   Preparação para conexão
+   TERMINAL ATIVO
 ================================================== */
 
 .component-terminal.active .component-terminal-dot {
@@ -876,13 +868,41 @@
 
   background: #1d4ed8;
   border-color: #1d4ed8;
-
   color: #ffffff;
 
   box-shadow:
     0 0 0 5px rgba(37, 99, 235, 0.16),
     0 4px 12px rgba(37, 99, 235, 0.25);
 }
+
+
+/* ==================================================
+   TERMINAL CONECTADO
+================================================== */
+
+.component-terminal.connected .component-terminal-dot {
+  background: #eff6ff;
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
+
+/* ==================================================
+   TERMINAL DESTINO
+================================================== */
+
+.component-terminal.connection-target .component-terminal-dot {
+  transform: scale(1.25);
+
+  background: #2563eb;
+  border-color: #1d4ed8;
+  color: #ffffff;
+
+  box-shadow:
+    0 0 0 5px rgba(37, 99, 235, 0.16),
+    0 4px 12px rgba(37, 99, 235, 0.25);
+}
+
 
 /* ==================================================
    MENSAGEM DO QUADRO
@@ -900,10 +920,10 @@
   gap: 8px;
 
   padding: 30px;
+
   box-sizing: border-box;
 
   color: #64748b;
-
   text-align: center;
 
   pointer-events: none;
@@ -922,6 +942,7 @@
   font-size: 12px;
 }
 
+
 /* ==================================================
    INDICADOR DE ENERGIA
 ================================================== */
@@ -937,12 +958,14 @@
   gap: 8px;
 
   min-height: 34px;
+
   padding: 0 12px;
 
   border: 1px solid #bbf7d0;
   border-radius: 999px;
 
   background: rgba(240, 253, 244, 0.95);
+
   color: #15803d;
 
   font-size: 11px;
@@ -950,6 +973,161 @@
 
   z-index: 30;
 }
+
+
+/* ==================================================
+   FIOS DO CIRCUITO
+================================================== */
+
+.circuit-connection {
+  pointer-events: none;
+  opacity: 1;
+}
+
+.circuit-connection .connection-wire {
+  stroke: #64748b;
+  stroke-width: 3;
+  fill: none;
+
+  stroke-linecap: round;
+  stroke-linejoin: round;
+
+  transition:
+    stroke 0.3s ease,
+    stroke-width 0.3s ease,
+    filter 0.3s ease;
+}
+
+.circuit-connection .connection-point {
+  fill: #64748b;
+  stroke: #ffffff;
+  stroke-width: 1.5;
+
+  transition:
+    fill 0.3s ease,
+    filter 0.3s ease;
+}
+
+
+/* ==================================================
+   COMPATIBILIDADE SVG
+================================================== */
+
+.circuit-connection line {
+  stroke: #2563eb;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+
+/* ==================================================
+   FIO ENERGIZADO
+================================================== */
+
+.circuit-connection.energized .connection-wire {
+  stroke: #f59e0b;
+  stroke-width: 4;
+
+  filter:
+    drop-shadow(
+      0 0 3px rgba(245, 158, 11, 0.85)
+    )
+    drop-shadow(
+      0 0 8px rgba(251, 191, 36, 0.45)
+    );
+}
+
+.circuit-connection.energized line {
+  stroke: #f59e0b;
+  stroke-width: 4;
+
+  filter:
+    drop-shadow(
+      0 0 3px rgba(245, 158, 11, 0.35)
+    );
+}
+
+.circuit-connection.energized .connection-point {
+  fill: #fbbf24;
+
+  filter:
+    drop-shadow(
+      0 0 5px rgba(251, 191, 36, 0.9)
+    );
+}
+
+
+/* ==================================================
+   CORRENTE ELÉTRICA VISUAL
+================================================== */
+
+.connection-current {
+  stroke: #fff7cc;
+  stroke-width: 2;
+  fill: none;
+
+  stroke-linecap: round;
+
+  stroke-dasharray: 8 12;
+
+  animation:
+    electricalCurrent
+    0.7s
+    linear
+    infinite;
+
+  opacity: 0.95;
+
+  pointer-events: none;
+}
+
+@keyframes electricalCurrent {
+  from {
+    stroke-dashoffset: 20;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+
+/* ==================================================
+   FIO TEMPORÁRIO
+================================================== */
+
+.connection-preview {
+  pointer-events: none;
+}
+
+.connection-preview line {
+  stroke: #2563eb;
+  stroke-width: 3;
+
+  stroke-linecap: round;
+
+  stroke-dasharray: 8 6;
+
+  opacity: 0.75;
+
+  vector-effect: non-scaling-stroke;
+}
+
+.connection-preview-point {
+  fill: #2563eb;
+  stroke: #ffffff;
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.connection-target {
+  fill: #eff6ff;
+  stroke: #2563eb;
+  stroke-width: 3;
+}
+
 
 /* ==================================================
    EXPERIMENTO / INTERRUPTOR
@@ -974,6 +1152,7 @@
     0 3px 12px rgba(15, 23, 42, 0.03);
 
   box-sizing: border-box;
+
   min-width: 0;
 }
 
@@ -1002,6 +1181,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+
   gap: 8px;
 
   min-width: 125px;
@@ -1019,6 +1199,7 @@
   font-weight: 800;
 
   cursor: pointer;
+
   flex: 0 0 auto;
 
   transition:
@@ -1041,6 +1222,7 @@
     0 0 0 3px rgba(34, 197, 94, 0.08);
 }
 
+
 /* ==================================================
    MEDIÇÕES
 ================================================== */
@@ -1058,6 +1240,7 @@
     0 4px 18px rgba(15, 23, 42, 0.04);
 
   box-sizing: border-box;
+
   min-width: 0;
 }
 
@@ -1067,6 +1250,7 @@
   justify-content: space-between;
 
   gap: 16px;
+
   margin-bottom: 16px;
 
   color: #64748b;
@@ -1079,11 +1263,13 @@
     repeat(4, minmax(0, 1fr));
 
   gap: 12px;
+
   min-width: 0;
 }
 
 .measurement-card {
   min-width: 0;
+
   padding: 15px;
 
   border: 1px solid #e2e8f0;
@@ -1115,6 +1301,7 @@
   overflow-wrap: anywhere;
 }
 
+
 /* ==================================================
    LEI DE OHM
 ================================================== */
@@ -1138,6 +1325,7 @@
     0 4px 18px rgba(15, 23, 42, 0.04);
 
   box-sizing: border-box;
+
   min-width: 0;
 }
 
@@ -1183,11 +1371,595 @@
   box-sizing: border-box;
 }
 
+
+/* ==================================================
+   LÂMPADA
+================================================== */
+
+.component-node-lamp {
+  position: absolute;
+
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.35s ease,
+    transform 0.25s ease;
+}
+
+.component-node-lamp:not(.energized) .component-node-icon {
+  opacity: 0.72;
+
+  filter: none;
+
+  transform: scale(1);
+
+  transition:
+    opacity 0.3s ease,
+    filter 0.3s ease,
+    transform 0.3s ease;
+}
+
+.component-node-lamp.energized {
+  border-color: #f59e0b !important;
+
+  box-shadow:
+    0 0 0 2px rgba(245, 158, 11, 0.18),
+
+    0 0 12px
+      rgba(
+        245,
+        158,
+        11,
+        calc(
+          0.35 +
+          var(--lamp-intensity, 0) * 0.35
+        )
+      ),
+
+    0 0 28px
+      rgba(
+        251,
+        191,
+        36,
+        calc(
+          0.20 +
+          var(--lamp-intensity, 0) * 0.30
+        )
+      );
+
+  transform: scale(1.03);
+}
+
+.component-node-lamp .component-node-icon {
+  transition:
+    color 0.3s ease,
+    filter 0.3s ease,
+    transform 0.3s ease;
+}
+
+.component-node-lamp.energized .component-node-icon {
+  color: #f59e0b !important;
+
+  filter:
+    drop-shadow(
+      0 0
+      calc(
+        4px +
+        var(--lamp-intensity, 0) * 5px
+      )
+      rgba(245, 158, 11, 0.95)
+    )
+
+    drop-shadow(
+      0 0
+      calc(
+        8px +
+        var(--lamp-intensity, 0) * 8px
+      )
+      rgba(251, 191, 36, 0.70)
+    );
+
+  transform:
+    scale(
+      calc(
+        1 +
+        var(--lamp-intensity, 0) * 0.12
+      )
+    );
+}
+
+.component-node-lamp.energized .component-node-icon svg {
+  color: #f59e0b !important;
+  stroke: #f59e0b !important;
+  fill: #fde68a !important;
+}
+
+
+/* ==================================================
+   HALO DA LÂMPADA
+================================================== */
+
+.lamp-energy-indicator {
+  position: absolute;
+
+  width: 50px;
+  height: 50px;
+
+  left: 50%;
+  top: 38%;
+
+  transform:
+    translate(-50%, -50%);
+
+  border-radius: 50%;
+
+  background:
+    radial-gradient(
+      circle,
+
+      rgba(
+        255,
+        244,
+        170,
+        calc(
+          0.25 +
+          var(--lamp-intensity, 0) * 0.40
+        )
+      ) 0%,
+
+      rgba(
+        251,
+        191,
+        36,
+        calc(
+          0.12 +
+          var(--lamp-intensity, 0) * 0.20
+        )
+      ) 38%,
+
+      transparent 75%
+    );
+
+  pointer-events: none;
+
+  z-index: 0;
+
+  animation:
+    lampEnergyPulse
+    1.2s
+    ease-in-out
+    infinite
+    alternate;
+}
+
+.component-node-lamp .component-node-icon,
+.component-node-lamp strong,
+.component-node-lamp small {
+  position: relative;
+  z-index: 2;
+}
+
+@keyframes lampEnergyPulse {
+  from {
+    opacity: 0.65;
+
+    transform:
+      translate(-50%, -50%)
+      scale(0.92);
+  }
+
+  to {
+    opacity: 1;
+
+    transform:
+      translate(-50%, -50%)
+      scale(
+        calc(
+          1 +
+          var(--lamp-intensity, 0) * 0.18
+        )
+      );
+  }
+}
+
+
+/* ==================================================
+   INTERRUPTOR
+================================================== */
+
+.component-node-switch {
+  position: absolute;
+
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.2s ease;
+}
+
+.component-node-switch.switch-off {
+  border-color: #94a3b8;
+}
+
+.component-node-switch.switch-off .component-node-icon {
+  color: #64748b;
+
+  transform:
+    rotate(-18deg);
+
+  transition:
+    color 0.25s ease,
+    transform 0.25s ease,
+    filter 0.25s ease;
+}
+
+.component-node-switch.switch-on {
+  border-color: #22c55e !important;
+
+  box-shadow:
+    0 0 0 2px rgba(34, 197, 94, 0.15),
+    0 0 14px rgba(34, 197, 94, 0.30);
+
+  transform: scale(1.02);
+}
+
+.component-node-switch.switch-on .component-node-icon {
+  color: #22c55e !important;
+
+  transform:
+    rotate(18deg);
+
+  filter:
+    drop-shadow(
+      0 0 5px rgba(34, 197, 94, 0.65)
+    );
+
+  transition:
+    color 0.25s ease,
+    transform 0.25s ease,
+    filter 0.25s ease;
+}
+
+
+/* ==================================================
+   INDICADOR ON / OFF
+================================================== */
+
+.switch-state-indicator {
+  position: absolute;
+
+  right: 7px;
+  bottom: 5px;
+
+  padding: 2px 5px;
+
+  border-radius: 4px;
+
+  font-size: 8px;
+  font-weight: 800;
+
+  line-height: 1;
+
+  letter-spacing: 0.5px;
+
+  pointer-events: none;
+
+  z-index: 5;
+
+  transition:
+    background 0.25s ease,
+    color 0.25s ease;
+}
+
+.component-node-switch.switch-off .switch-state-indicator {
+  background: #e2e8f0;
+  color: #64748b;
+}
+
+.component-node-switch.switch-on .switch-state-indicator {
+  background: #dcfce7;
+  color: #15803d;
+
+  box-shadow:
+    0 0 5px rgba(34, 197, 94, 0.35);
+}
+
+
+/* ==================================================
+   MOTOR
+================================================== */
+
+.component-node-motor {
+  position: absolute;
+
+  transition:
+    border-color 0.25s ease,
+    background 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.2s ease;
+}
+
+.component-node-motor .component-node-icon {
+  color: #64748b;
+  opacity: 0.8;
+
+  transition:
+    color 0.25s ease,
+    opacity 0.25s ease,
+    filter 0.25s ease;
+}
+
+.component-node-motor.energized,
+.component-node-motor.motor-running {
+  border-color: #2563eb !important;
+
+  background:
+    linear-gradient(
+      145deg,
+      #eff6ff 0%,
+      #dbeafe 100%
+    ) !important;
+
+  box-shadow:
+    0 0 0 2px rgba(37, 99, 235, 0.12),
+    0 0 18px rgba(37, 99, 235, 0.35),
+    0 8px 24px rgba(37, 99, 235, 0.18);
+
+  transform: scale(1.03);
+}
+
+.component-node-motor.energized .component-node-icon,
+.component-node-motor.motor-running .component-node-icon {
+  color: #2563eb !important;
+  opacity: 1;
+
+  filter:
+    drop-shadow(
+      0 0 5px rgba(37, 99, 235, 0.65)
+    );
+
+  animation:
+    motorSpin
+    0.9s
+    linear
+    infinite;
+}
+
+.component-node-motor.motor-running .component-node-icon svg {
+  color: #2563eb !important;
+  stroke: #2563eb !important;
+}
+
+.motor-energy-indicator {
+  position: absolute;
+
+  top: 7px;
+  right: 7px;
+
+  z-index: 8;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 20px;
+
+  padding: 3px 7px;
+
+  border-radius: 999px;
+
+  background: #dbeafe;
+
+  border: 1px solid #93c5fd;
+
+  color: #1d4ed8;
+
+  font-size: 8px;
+  font-weight: 800;
+
+  letter-spacing: 0.04em;
+
+  box-shadow:
+    0 0 8px rgba(37, 99, 235, 0.35);
+
+  pointer-events: none;
+
+  animation:
+    motorIndicatorPulse
+    1.2s
+    ease-in-out
+    infinite
+    alternate;
+}
+
+@keyframes motorSpin {
+  from {
+    transform:
+      rotate(0deg);
+  }
+
+  to {
+    transform:
+      rotate(360deg);
+  }
+}
+
+@keyframes motorIndicatorPulse {
+  from {
+    opacity: 0.75;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+
+/* ==================================================
+   LED
+================================================== */
+
+.component-node-led {
+  position: absolute;
+
+  transition:
+    border-color 0.25s ease,
+    background 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.2s ease;
+}
+
+.component-node-led .component-node-icon {
+  color: #64748b;
+  opacity: 0.8;
+
+  transition:
+    color 0.25s ease,
+    opacity 0.25s ease,
+    filter 0.25s ease;
+}
+
+.component-node-led.energized,
+.component-node-led.led-on {
+  border-color: #ef4444 !important;
+
+  background:
+    linear-gradient(
+      145deg,
+      #fff1f2 0%,
+      #ffe4e6 100%
+    ) !important;
+
+  box-shadow:
+    0 0 0 2px rgba(239, 68, 68, 0.12),
+    0 0 18px rgba(239, 68, 68, 0.4),
+    0 8px 24px rgba(239, 68, 68, 0.18);
+
+  transform: scale(1.03);
+}
+
+.component-node-led.energized .component-node-icon,
+.component-node-led.led-on .component-node-icon {
+  color: #ef4444 !important;
+  opacity: 1;
+
+  filter:
+    drop-shadow(
+      0 0 6px rgba(239, 68, 68, 0.75)
+    );
+
+  animation:
+    ledPulse
+    0.9s
+    ease-in-out
+    infinite
+    alternate;
+}
+
+.component-node-led.energized .component-node-icon svg,
+.component-node-led.led-on .component-node-icon svg {
+  stroke: #ef4444 !important;
+  color: #ef4444 !important;
+  fill: #fecaca;
+}
+
+.led-energy-indicator {
+  position: absolute;
+
+  top: 7px;
+  right: 7px;
+
+  z-index: 8;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 20px;
+
+  padding: 3px 7px;
+
+  border-radius: 999px;
+
+  background: #fee2e2;
+
+  border: 1px solid #fca5a5;
+
+  color: #b91c1c;
+
+  font-size: 8px;
+  font-weight: 800;
+
+  letter-spacing: 0.04em;
+
+  box-shadow:
+    0 0 9px rgba(239, 68, 68, 0.45);
+
+  pointer-events: none;
+
+  animation:
+    ledIndicatorPulse
+    0.8s
+    ease-in-out
+    infinite
+    alternate;
+}
+
+@keyframes ledPulse {
+  from {
+    transform: scale(1);
+
+    filter:
+      drop-shadow(
+        0 0 4px rgba(239, 68, 68, 0.45)
+      );
+  }
+
+  to {
+    transform: scale(1.13);
+
+    filter:
+      drop-shadow(
+        0 0 10px rgba(239, 68, 68, 0.95)
+      );
+  }
+}
+
+@keyframes ledIndicatorPulse {
+  from {
+    opacity: 0.75;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+
+/* ==================================================
+   INDICADORES DE ENERGIA
+================================================== */
+
+.motor-energy-indicator,
+.led-energy-indicator,
+.lamp-energy-indicator {
+  pointer-events: none;
+}
+
+
+/* ==================================================
+   COMPONENTES ENERGIZADOS
+================================================== */
+
+.component-node.energized .component-node-icon {
+  opacity: 1;
+}
+
+
 /* ==================================================
    RESPONSIVIDADE — ATÉ 1200PX
 ================================================== */
 
 @media (max-width: 1200px) {
+
   .laboratory-layout {
     grid-template-columns:
       minmax(220px, 280px)
@@ -1214,11 +1986,13 @@
   }
 }
 
+
 /* ==================================================
    RESPONSIVIDADE — ATÉ 900PX
 ================================================== */
 
 @media (max-width: 900px) {
+
   .laboratory-layout {
     grid-template-columns: 1fr;
   }
@@ -1249,11 +2023,13 @@
   }
 }
 
+
 /* ==================================================
    RESPONSIVIDADE — ATÉ 700PX
 ================================================== */
 
 @media (max-width: 700px) {
+
   .laboratory-page {
     padding-bottom: 20px;
   }
@@ -1339,11 +2115,13 @@
   }
 }
 
+
 /* ==================================================
    RESPONSIVIDADE — ATÉ 480PX
 ================================================== */
 
 @media (max-width: 480px) {
+
   .laboratory-header h1 {
     font-size: 21px;
   }
@@ -1400,6 +2178,7 @@
   }
 }
 
+
 /* ==================================================
    ACESSIBILIDADE
 ================================================== */
@@ -1408,20 +2187,150 @@
 .laboratory-reset-button:focus-visible,
 .delete-component-button:focus-visible,
 .switch-control-button:focus-visible {
-  outline: 3px solid rgba(37, 99, 235, 0.25);
+
+  outline:
+    3px solid rgba(37, 99, 235, 0.25);
+
   outline-offset: 2px;
 }
+
 
 /* ==================================================
    REDUÇÃO DE MOVIMENTO
 ================================================== */
 
 @media (prefers-reduced-motion: reduce) {
+
   .component-node,
   .component-item,
   .laboratory-reset-button,
   .delete-component-button,
-  .switch-control-button {
-    transition: none;
+  .switch-control-button,
+  .connection-current,
+  .lamp-energy-indicator,
+  .component-node-motor.energized .component-node-icon,
+  .component-node-motor.motor-running .component-node-icon,
+  .component-node-led.energized .component-node-icon,
+  .component-node-led.led-on .component-node-icon,
+  .motor-energy-indicator,
+  .led-energy-indicator {
+
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ==================================================
+   SELEÇÃO E ANIMAÇÕES REFORÇADAS
+================================================== */
+
+.selected-component-panel {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 2px solid #3b82f6 !important;
+  border-radius: 12px;
+  background: #eff6ff !important;
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.15);
+}
+
+.component-node.selected {
+  outline: 3px solid #2563eb !important;
+  outline-offset: 3px;
+  z-index: 30 !important;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.2), 0 8px 24px rgba(15, 23, 42, 0.12) !important;
+}
+
+/* Motor girando — mais visível */
+.component-node-motor.motor-running .component-node-icon,
+.component-node-motor.energized.motor-running .component-node-icon {
+  animation: motorSpin 0.7s linear infinite !important;
+  color: #2563eb !important;
+}
+
+/* Lâmpada acesa — mais visível */
+.component-node-lamp.energized {
+  border-color: #eab308 !important;
+  background: linear-gradient(145deg, #fffbeb 0%, #fef3c7 100%) !important;
+  box-shadow:
+    0 0 0 2px rgba(234, 179, 8, 0.25),
+    0 0 28px rgba(250, 204, 21, 0.55),
+    0 8px 24px rgba(234, 179, 8, 0.2) !important;
+}
+
+.component-node-lamp.energized .component-node-icon {
+  color: #ca8a04 !important;
+  filter: drop-shadow(0 0 8px rgba(250, 204, 21, 0.9)) !important;
+}
+
+.component-node-lamp.energized .lamp-energy-indicator {
+  display: block !important;
+  opacity: 1 !important;
+}
+
+/* Garantir que animações do lab não sejam desligadas */
+@media (prefers-reduced-motion: reduce) {
+  .component-node-motor.motor-running .component-node-icon {
+    animation: motorSpin 0.7s linear infinite !important;
+  }
+  .component-node-lamp.energized .lamp-energy-indicator {
+    animation: lampEnergyPulse 1.2s ease-in-out infinite alternate !important;
+  }
+}
+
+
+/* ==================================================
+   ANIMAÇÕES FORÇADAS (inline + classe)
+================================================== */
+
+@keyframes motorSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.component-node-icon.is-spinning,
+.component-node-icon.is-spinning svg {
+  animation: motorSpin 0.7s linear infinite !important;
+  transform-origin: center center !important;
+  color: #2563eb !important;
+}
+
+.component-node-lamp.energized,
+.component-node-lamp.lamp-on {
+  border-color: #eab308 !important;
+  background: linear-gradient(145deg, #fffbeb 0%, #fde68a 100%) !important;
+  box-shadow:
+    0 0 0 3px rgba(234, 179, 8, 0.35),
+    0 0 32px rgba(250, 204, 21, 0.7) !important;
+}
+
+.component-node-icon.is-glowing,
+.component-node-icon.is-glowing svg {
+  color: #ca8a04 !important;
+  fill: #fbbf24 !important;
+  filter: drop-shadow(0 0 10px rgba(250, 204, 21, 0.95)) !important;
+}
+
+.component-node-lamp.energized .lamp-energy-indicator {
+  display: inline-block !important;
+  opacity: 1 !important;
+  background: radial-gradient(circle, #fde047 0%, transparent 70%);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -60%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .component-node-icon.is-spinning,
+  .component-node-icon.is-spinning svg {
+    animation: motorSpin 0.7s linear infinite !important;
   }
 }

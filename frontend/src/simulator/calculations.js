@@ -167,21 +167,6 @@ export function calculatePowerVR(voltage, resistance) {
 
 /**
  * Recebe dois valores conhecidos e calcula o terceiro.
- *
- * Exemplos:
- *
- * calculateOhmLaw({
- *   voltage: 12,
- *   resistance: 50
- * })
- *
- * retorna:
- *
- * {
- *   voltage: 12,
- *   resistance: 50,
- *   current: 0.24
- * }
  */
 export function calculateOhmLaw({
   voltage = null,
@@ -272,12 +257,6 @@ export function calculateOhmLaw({
 /**
  * Calcula potência utilizando
  * a combinação de valores disponível.
- *
- * Pode utilizar:
- *
- * P = V × I
- * P = I² × R
- * P = V² / R
  */
 export function calculatePower({
   voltage = null,
@@ -350,4 +329,139 @@ export function roundValue(
     Math.round(value * factor) /
     factor
   );
+}
+
+
+// --------------------------------------------------
+// CAPACITOR E INDUTOR (RC / RL)
+// --------------------------------------------------
+
+/**
+ * Converte µF → Farads
+ */
+export function microFaradsToFarads(uF) {
+  if (!isPositiveNumber(uF)) {
+    return null;
+  }
+  return uF * 1e-6;
+}
+
+/**
+ * Converte mH → Henries
+ */
+export function milliHenriesToHenries(mH) {
+  if (!isPositiveNumber(mH)) {
+    return null;
+  }
+  return mH * 1e-3;
+}
+
+/**
+ * Constante de tempo RC
+ * τ = R × C
+ */
+export function calculateTauRC(resistance, capacitanceFarads) {
+  if (
+    !isPositiveNumber(resistance) ||
+    !isPositiveNumber(capacitanceFarads)
+  ) {
+    return null;
+  }
+  return resistance * capacitanceFarads;
+}
+
+/**
+ * Constante de tempo RL
+ * τ = L / R
+ */
+export function calculateTauRL(inductanceHenries, resistance) {
+  if (
+    !isPositiveNumber(inductanceHenries) ||
+    !isPositiveNumber(resistance)
+  ) {
+    return null;
+  }
+  return inductanceHenries / resistance;
+}
+
+/**
+ * Carga de capacitor
+ * Vc(t) = V × (1 - e^(-t/τ))
+ */
+export function capacitorChargeVoltage(voltage, time, tau) {
+  if (
+    !isPositiveNumber(voltage) ||
+    !isValidNumber(time) ||
+    time < 0 ||
+    !isPositiveNumber(tau)
+  ) {
+    return null;
+  }
+  return voltage * (1 - Math.exp(-time / tau));
+}
+
+/**
+ * Descarga de capacitor
+ * Vc(t) = V0 × e^(-t/τ)
+ */
+export function capacitorDischargeVoltage(initialVoltage, time, tau) {
+  if (
+    !isPositiveNumber(initialVoltage) ||
+    !isValidNumber(time) ||
+    time < 0 ||
+    !isPositiveNumber(tau)
+  ) {
+    return null;
+  }
+  return initialVoltage * Math.exp(-time / tau);
+}
+
+/**
+ * Corrente no indutor (crescimento)
+ * IL(t) = (V/R) × (1 - e^(-t/τ))
+ */
+export function inductorCurrentRise(voltage, resistance, time, tau) {
+  if (
+    !isPositiveNumber(voltage) ||
+    !isPositiveNumber(resistance) ||
+    !isValidNumber(time) ||
+    time < 0 ||
+    !isPositiveNumber(tau)
+  ) {
+    return null;
+  }
+  const iFinal = voltage / resistance;
+  return iFinal * (1 - Math.exp(-time / tau));
+}
+
+/**
+ * Corrente no indutor (decrescimento)
+ * IL(t) = I0 × e^(-t/τ)
+ */
+export function inductorCurrentDecay(initialCurrent, time, tau) {
+  if (
+    !isPositiveNumber(initialCurrent) ||
+    !isValidNumber(time) ||
+    time < 0 ||
+    !isPositiveNumber(tau)
+  ) {
+    return null;
+  }
+  return initialCurrent * Math.exp(-time / tau);
+}
+
+/**
+ * Nível de carga normalizado (0 → 1)
+ * Após ~5τ ≈ regime permanente (99%)
+ */
+export function chargeLevel(time, tau) {
+  if (
+    !isValidNumber(time) ||
+    time < 0 ||
+    !isPositiveNumber(tau)
+  ) {
+    return 0;
+  }
+  const level = 1 - Math.exp(-time / tau);
+  return Math.min(Math.max(level, 0), 1);
 }
