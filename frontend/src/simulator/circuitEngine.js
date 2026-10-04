@@ -7,6 +7,8 @@ import {
   calculateTauRC,
   calculateTauRL,
   chargeLevel,
+  calculateCapacitorEnergy,
+  calculateInductorEnergy,
 } from "./calculations";
 
 import { COMPONENT_TYPES } from "./components/componentTypes";
@@ -1886,7 +1888,9 @@ export function getEnergizedLoadIds(
 export function getReactiveAnalysis(
   circuit,
   resistance,
-  elapsedSeconds = 0
+  elapsedSeconds = 0,
+  voltage = 0,
+  current = 0
 ) {
   const capacitor = getCapacitor(circuit);
   const inductor = getInductor(circuit);
@@ -1897,12 +1901,20 @@ export function getReactiveAnalysis(
   };
 
   const R = Number(resistance) || 0;
+  const V = Math.max(Number(voltage) || 0, 0);
+  const I = Math.max(Number(current) || 0, 0);
 
   if (capacitor) {
     const uF = Number(capacitor.value) || 0;
     const C = microFaradsToFarads(uF);
-    const tau = (R > 0 && C) ? calculateTauRC(R, C) : null;
+    const tau = R > 0 && C ? calculateTauRC(R, C) : null;
     const level = tau ? chargeLevel(elapsedSeconds, tau) : 0;
+    const voltageAtTime = tau
+      ? capacitorChargeVoltage(V, elapsedSeconds, tau)
+      : 0;
+    const energy = C
+      ? calculateCapacitorEnergy(C, voltageAtTime ?? 0)
+      : null;
 
     result.capacitor = {
       id: capacitor.id,
@@ -1912,16 +1924,25 @@ export function getReactiveAnalysis(
       tauMs: tau != null ? roundValue(tau * 1000, 3) : null,
       chargeLevel: level,
       chargePercent: roundValue(level * 100, 1),
-      // Em DC permanente: circuito aberto
+      voltage: roundValue(voltageAtTime ?? 0, 3),
+      energyJ: energy != null ? roundValue(energy, 6) : null,
+      referenceResistance: R > 0 ? roundValue(R, 2) : null,
       behaviorDC: "open",
+      state: elapsedSeconds > 0 ? "carregando" : "inicial",
     };
   }
 
   if (inductor) {
     const mH = Number(inductor.value) || 0;
     const L = milliHenriesToHenries(mH);
-    const tau = (R > 0 && L) ? calculateTauRL(L, R) : null;
+    const tau = R > 0 && L ? calculateTauRL(L, R) : null;
     const level = tau ? chargeLevel(elapsedSeconds, tau) : 0;
+    const currentAtTime = tau
+      ? inductorCurrentRise(V, R, elapsedSeconds, tau)
+      : I;
+    const energy = L
+      ? calculateInductorEnergy(L, currentAtTime ?? 0)
+      : null;
 
     result.inductor = {
       id: inductor.id,
@@ -1931,8 +1952,11 @@ export function getReactiveAnalysis(
       tauMs: tau != null ? roundValue(tau * 1000, 3) : null,
       chargeLevel: level,
       chargePercent: roundValue(level * 100, 1),
-      // Em DC permanente: curto-circuito
+      current: roundValue(currentAtTime ?? 0, 4),
+      energyJ: energy != null ? roundValue(energy, 6) : null,
+      referenceResistance: R > 0 ? roundValue(R, 2) : null,
       behaviorDC: "short",
+      state: elapsedSeconds > 0 ? "energizando" : "inicial",
     };
   }
 
@@ -1981,6 +2005,15 @@ export function simulateCircuit(
       loads: {},
 
       energizedLoadIds: [],
+
+      reactive:
+        getReactiveAnalysis(
+          circuit,
+          0,
+          0,
+          0,
+          0
+        ),
 
     };
   }
@@ -2057,6 +2090,15 @@ export function simulateCircuit(
       loads,
 
       energizedLoadIds: [],
+
+      reactive:
+        getReactiveAnalysis(
+          circuit,
+          resistance,
+          0,
+          voltage,
+          0
+        ),
 
     };
   }
@@ -2197,7 +2239,9 @@ export function simulateCircuit(
       getReactiveAnalysis(
         circuit,
         resistance,
-        0
+        0,
+        voltage,
+        current
       ),
 
 

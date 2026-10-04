@@ -465,3 +465,41 @@ export function chargeLevel(time, tau) {
   const level = 1 - Math.exp(-time / tau);
   return Math.min(Math.max(level, 0), 1);
 }
+
+/**
+ * Energia armazenada em um capacitor.
+ * E = 1/2 × C × V²
+ */
+export function calculateCapacitorEnergy(
+  capacitanceFarads,
+  voltage
+) {
+  if (
+    !isPositiveNumber(capacitanceFarads) ||
+    !isValidNumber(voltage) ||
+    voltage < 0
+  ) {
+    return null;
+  }
+
+  return 0.5 * capacitanceFarads * voltage * voltage;
+}
+
+/**
+ * Energia armazenada em um indutor.
+ * E = 1/2 × L × I²
+ */
+export function calculateInductorEnergy(
+  inductanceHenries,
+  current
+) {
+  if (
+    !isPositiveNumber(inductanceHenries) ||
+    !isValidNumber(current) ||
+    current < 0
+  ) {
+    return null;
+  }
+
+  return 0.5 * inductanceHenries * current * current;
+}

@@ -2433,25 +2433,75 @@ console.log(
               </div>
 
               {simulation.reactive?.capacitor && (
-                <div className="measurement-card">
-                  <span>
-                    τ Capacitor
-                  </span>
-                  <strong>
-                    {simulation.reactive.capacitor.tauMs ?? "—"} ms
-                  </strong>
-                </div>
+                <>
+                  <div className="measurement-card">
+                    <span>Capacitor</span>
+                    <strong>
+                      {simulation.reactive.capacitor.valueuF ?? "—"} µF
+                    </strong>
+                  </div>
+
+                  <div className="measurement-card">
+                    <span>τ Capacitor</span>
+                    <strong>
+                      {simulation.reactive.capacitor.tauMs != null
+                        ? `${simulation.reactive.capacitor.tauMs} ms`
+                        : "R necessária"}
+                    </strong>
+                  </div>
+
+                  <div className="measurement-card">
+                    <span>Energia do capacitor</span>
+                    <strong>
+                      {simulation.reactive.capacitor.energyJ != null
+                        ? `${simulation.reactive.capacitor.energyJ} J`
+                        : "—"}
+                    </strong>
+                  </div>
+
+                  <div className="measurement-card">
+                    <span>Tensão no capacitor</span>
+                    <strong>
+                      {simulation.reactive.capacitor.voltage ?? "—"} V
+                    </strong>
+                  </div>
+                </>
               )}
 
               {simulation.reactive?.inductor && (
-                <div className="measurement-card">
-                  <span>
-                    τ Indutor
-                  </span>
-                  <strong>
-                    {simulation.reactive.inductor.tauMs ?? "—"} ms
-                  </strong>
-                </div>
+                <>
+                  <div className="measurement-card">
+                    <span>Indutor</span>
+                    <strong>
+                      {simulation.reactive.inductor.valuemH ?? "—"} mH
+                    </strong>
+                  </div>
+
+                  <div className="measurement-card">
+                    <span>τ Indutor</span>
+                    <strong>
+                      {simulation.reactive.inductor.tauMs != null
+                        ? `${simulation.reactive.inductor.tauMs} ms`
+                        : "R necessária"}
+                    </strong>
+                  </div>
+
+                  <div className="measurement-card">
+                    <span>Energia do indutor</span>
+                    <strong>
+                      {simulation.reactive.inductor.energyJ != null
+                        ? `${simulation.reactive.inductor.energyJ} J`
+                        : "—"}
+                    </strong>
+                  </div>
+
+                  <div className="measurement-card">
+                    <span>Corrente no indutor</span>
+                    <strong>
+                      {simulation.reactive.inductor.current ?? "—"} A
+                    </strong>
+                  </div>
+                </>
               )}
 
             </div>
