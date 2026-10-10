@@ -399,6 +399,31 @@ export function addComponent(
       y: 120,
     };
 
+  // Desloca um pouco se já existirem componentes (evita empilhar)
+  const existingCount = (circuit.components || []).length;
+  const offset = existingCount * 24;
+
+  // Valores padrão por tipo de comando
+  let defaultValue =
+    component.defaultValue ??
+    component.value ??
+    defaultComponent?.value ??
+    0;
+
+  if (componentType === COMPONENT_TYPES.PUSH_BUTTON_NC) {
+    defaultValue = true; // NF começa fechada
+  }
+  if (componentType === COMPONENT_TYPES.BREAKER) {
+    defaultValue = true; // Disjuntor começa fechado
+  }
+  if (
+    componentType === COMPONENT_TYPES.SWITCH ||
+    componentType === COMPONENT_TYPES.PUSH_BUTTON_NO ||
+    componentType === COMPONENT_TYPES.CONTACTOR
+  ) {
+    defaultValue = Boolean(defaultValue);
+  }
+
   const newComponent = {
     id: generateId(componentType),
 
@@ -407,11 +432,7 @@ export function addComponent(
     name:
       component.name || defaultComponent?.name || componentType,
 
-    value:
-      component.defaultValue ??
-      component.value ??
-      defaultComponent?.value ??
-      0,
+    value: defaultValue,
 
     unit:
       component.unit ?? defaultComponent?.unit ?? "",
@@ -419,17 +440,18 @@ export function addComponent(
     enabled: true,
 
     position: {
-      x: defaultPosition.x,
-      y: defaultPosition.y,
+      x: defaultPosition.x + (offset % 200),
+      y: defaultPosition.y + Math.floor(offset / 8),
     },
   };
 
 
   /* ==================================================
-     ADICIONAR COMPONENTE
+     ADICIONAR COMPONENTE (sem fios automáticos)
+     O aluno liga tudo manualmente.
   ================================================== */
 
-  let nextCircuit = {
+  return {
     ...circuit,
 
     components: [
@@ -440,20 +462,6 @@ export function addComponent(
     selectedComponent:
       newComponent.id,
   };
-
-
-  /* ==================================================
-     RESTAURAR CONEXÕES DO CIRCUITO PADRÃO
-  ================================================== */
-
-  nextCircuit =
-    restoreDefaultConnections(
-      nextCircuit,
-      newComponent
-    );
-
-
-  return nextCircuit;
 }
 
 

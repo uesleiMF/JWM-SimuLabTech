@@ -1,8 +1,11 @@
 import {
+  useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
+
+import { useSearchParams } from "react-router-dom";
 
 import {
   Activity,
@@ -17,22 +20,21 @@ import {
   Settings2,
   Trash2,
   Zap,
+  Undo2,
+  Save,
+  FolderOpen,
+  ZoomIn,
+  ZoomOut,
+  ClipboardCheck,
+  X,
 } from "lucide-react";
 
 import "./Laboratory.css";
 
-import {
-  simulateCircuit,
-} from "../../simulator/circuitEngine";
-
-import { defaultCircuit } from "../../simulator/defaultCircuit";
-
+import { simulateCircuit } from "../../simulator/circuitEngine";
 import { COMPONENT_TYPES } from "../../simulator/components/componentTypes";
-
 import { componentCatalog } from "../../simulator/components/componentCatalog";
-
 import ComponentNode from "../../simulator/ComponentNode";
-
 import ConnectionLayer from "../../components/Laboratory/ConnectionLayer";
 
 import {
@@ -48,6 +50,14 @@ import {
   createTerminalKey,
 } from "../../simulator/connections/connectionUtils";
 
+import {
+  EXERCISES,
+  getExerciseById,
+  validateExercise,
+} from "../../simulator/exercises";
+
+import { createInitialCircuit } from "./hooks/useLaboratory";
+
 
 /* ==================================================
    MAPA DE ÍCONES
@@ -62,41 +72,12 @@ const iconMap = {
   [COMPONENT_TYPES.LAMP]: Lightbulb,
   [COMPONENT_TYPES.MOTOR]: Zap,
   [COMPONENT_TYPES.LED]: Lightbulb,
+  [COMPONENT_TYPES.PUSH_BUTTON_NO]: Power,
+  [COMPONENT_TYPES.PUSH_BUTTON_NC]: Power,
+  [COMPONENT_TYPES.CONTACTOR]: Settings2,
+  [COMPONENT_TYPES.BREAKER]: CircleAlert,
+  [COMPONENT_TYPES.INDICATOR]: Lightbulb,
 };
-
-
-/* ==================================================
-   CIRCUITO INICIAL
-================================================== */
-
-function createInitialCircuit() {
-  return {
-    ...defaultCircuit,
-
-    components:
-      (defaultCircuit.components || []).map(
-        (component) => ({
-          ...component,
-
-          position: {
-            ...(component.position || {
-              x: 0,
-              y: 0,
-            }),
-          },
-        })
-      ),
-
-    wires:
-      (defaultCircuit.wires || []).map(
-        (wire) => ({
-          ...wire,
-        })
-      ),
-
-    selectedComponent: null,
-  };
-}
 
 
 /* ==================================================
@@ -104,6 +85,8 @@ function createInitialCircuit() {
 ================================================== */
 
 export default function Laboratory() {
+
+  const [searchParams, setSearchParams] = useSearchParams();
 
   /* ==================================================
      CIRCUITO
@@ -119,7 +102,7 @@ export default function Laboratory() {
 
   const [message, setMessage] =
     useState(
-      "Monte e teste seu circuito elétrico."
+      "Quadro vazio. Adicione componentes e ligue os terminais manualmente."
     );
 
 
@@ -139,12 +122,64 @@ export default function Laboratory() {
   ] = useState(null);
 
 
+  /* Pontos intermediários (waypoints) para desenho manual do fio */
+  const [
+    connectionWaypoints,
+    setConnectionWaypoints,
+  ] = useState([]);
+
+
+  /* Fio selecionado (para apagar / editar) */
+  const [
+    selectedWireId,
+    setSelectedWireId,
+  ] = useState(null);
+
+
+  /* Exercício ativo + resultado da validação */
+  const activeExerciseId =
+    searchParams.get("exercicio") || null;
+
+  const activeExercise = useMemo(
+    () =>
+      activeExerciseId
+        ? getExerciseById(activeExerciseId)
+        : null,
+    [activeExerciseId]
+  );
+
+  const [validationResult, setValidationResult] =
+    useState(null);
+
+
   /* ==================================================
      REFERÊNCIA DO QUADRO
   ================================================== */
 
   const boardRef =
     useRef(null);
+
+
+  /* ==================================================
+     HISTÓRICO (UNDO)
+  ================================================== */
+
+  const [history, setHistory] =
+    useState(() => {
+      const initial = createInitialCircuit();
+      return [JSON.parse(JSON.stringify(initial))];
+    });
+
+  const [historyIndex, setHistoryIndex] =
+    useState(0);
+
+
+  /* ==================================================
+     ZOOM
+  ================================================== */
+
+  const [zoom, setZoom] =
+    useState(1);
 
 
   /* ==================================================
@@ -155,41 +190,6 @@ export default function Laboratory() {
     () => simulateCircuit(circuit),
     [circuit]
   );
-
-console.log(
-  "MOTOR:",
-  circuit?.components?.find(
-    (component) =>
-      component.type === COMPONENT_TYPES.MOTOR
-  )
-);
-
-console.log(
-  "SWITCH:",
-  circuit?.components?.find(
-    (component) =>
-      component.type === COMPONENT_TYPES.SWITCH
-  )
-);
-
-console.log(
-  "SOURCE:",
-  circuit?.components?.find(
-    (component) =>
-      component.type === COMPONENT_TYPES.SOURCE
-  )
-);
-
-console.log(
-  "WIRES:",
-  circuit?.wires
-);
-
-console.log(
-  "SIMULATION:",
-  simulation
-);
-
 
 
   /* ==================================================
@@ -237,7 +237,11 @@ console.log(
   ================================================== */
 
   const switchOn =
-    switchComponent?.value === true;
+    switchComponent?.value === true ||
+    switchComponent?.value === 1 ||
+    switchComponent?.value === "1" ||
+    switchComponent?.value === "true" ||
+    switchComponent?.value === "on";
 
 
   /* ==================================================
@@ -266,7 +270,9 @@ console.log(
       component.type ===
         COMPONENT_TYPES.LED ||
       component.type ===
-        COMPONENT_TYPES.MOTOR
+        COMPONENT_TYPES.MOTOR ||
+      component.type ===
+        COMPONENT_TYPES.INDICATOR
     ) {
 
       const loadState =
@@ -346,13 +352,26 @@ console.log(
 
     if (
       component.type ===
-      COMPONENT_TYPES.SWITCH
+        COMPONENT_TYPES.SWITCH ||
+      component.type ===
+        COMPONENT_TYPES.PUSH_BUTTON_NO ||
+      component.type ===
+        COMPONENT_TYPES.PUSH_BUTTON_NC ||
+      component.type ===
+        COMPONENT_TYPES.CONTACTOR ||
+      component.type ===
+        COMPONENT_TYPES.BREAKER
     ) {
+
+      const closed =
+        component.value === true ||
+        component.value === "true" ||
+        component.value === 1;
 
       return {
         energized:
           simulation.energized === true &&
-          switchOn,
+          closed,
 
         running: false,
 
@@ -443,12 +462,286 @@ console.log(
 
 
   /* ==================================================
+     HISTÓRICO - SALVAR ESTADO
+  ================================================== */
+
+  const pushHistory = (nextCircuit) => {
+    const snapshot = JSON.parse(
+      JSON.stringify(nextCircuit)
+    );
+
+    setHistory((currentHistory) => {
+      const nextHistory = [
+        ...currentHistory,
+        snapshot,
+      ].slice(-30);
+
+      setHistoryIndex(nextHistory.length - 1);
+
+      return nextHistory;
+    });
+  };
+
+
+  /* ==================================================
+     ATUALIZAR CIRCUITO COM HISTÓRICO
+  ================================================== */
+
+  const updateCircuit = (updater) => {
+    setCircuit((current) => {
+      const next =
+        typeof updater === "function"
+          ? updater(current)
+          : updater;
+
+      pushHistory(next);
+
+      return next;
+    });
+  };
+
+
+  /* ==================================================
+     DESFAZER (UNDO)
+  ================================================== */
+
+  const handleUndo = () => {
+    if (historyIndex <= 0) {
+      setMessage(
+        "Não há ações para desfazer."
+      );
+      return;
+    }
+
+    const previousIndex =
+      historyIndex - 1;
+
+    const previousCircuit =
+      history[previousIndex];
+
+    if (!previousCircuit) {
+      return;
+    }
+
+    setHistoryIndex(previousIndex);
+    setCircuit(
+      JSON.parse(
+        JSON.stringify(previousCircuit)
+      )
+    );
+
+    setConnectionStart(null);
+    setMousePosition(null);
+    setMessage("Ação desfeita.");
+  };
+
+
+  /* ==================================================
+     VALIDAÇÃO DE EXERCÍCIO
+  ================================================== */
+
+  useEffect(() => {
+    if (activeExercise) {
+      setMessage(
+        `Exercício: ${activeExercise.title}. ${activeExercise.description}`
+      );
+      setValidationResult(null);
+    }
+  }, [activeExerciseId]);
+
+  const handleValidateExercise = () => {
+    if (!activeExerciseId) {
+      // Sem exercício na URL: mostra seletor simples no message
+      setMessage(
+        "Abra um exercício em /app/exercicios ou use ?exercicio=ex-lamp-switch na URL."
+      );
+      return;
+    }
+
+    const result = validateExercise(circuit, activeExerciseId);
+    setValidationResult(result);
+    setMessage(result.message);
+  };
+
+  const handleClearExercise = () => {
+    searchParams.delete("exercicio");
+    setSearchParams(searchParams, { replace: true });
+    setValidationResult(null);
+    setMessage(
+      "Quadro livre. Monte qualquer circuito manualmente."
+    );
+  };
+
+  /* ==================================================
+     SALVAR CIRCUITO (localStorage)
+  ================================================== */
+
+  const handleSaveCircuit = () => {
+    try {
+      const payload = {
+        version: 1,
+        savedAt: new Date().toISOString(),
+        circuit,
+      };
+
+      localStorage.setItem(
+        "jwm_simulabtech_circuit",
+        JSON.stringify(payload)
+      );
+
+      setMessage(
+        "Circuito salvo com sucesso."
+      );
+    } catch {
+      setMessage(
+        "Não foi possível salvar o circuito."
+      );
+    }
+  };
+
+
+  /* ==================================================
+     CARREGAR CIRCUITO (localStorage)
+  ================================================== */
+
+  const handleLoadCircuit = () => {
+    try {
+      const raw = localStorage.getItem(
+        "jwm_simulabtech_circuit"
+      );
+
+      if (!raw) {
+        setMessage(
+          "Nenhum circuito salvo encontrado."
+        );
+        return;
+      }
+
+      const payload = JSON.parse(raw);
+
+      if (
+        !payload?.circuit?.components
+      ) {
+        setMessage(
+          "Arquivo de circuito inválido."
+        );
+        return;
+      }
+
+      const loaded = {
+        ...payload.circuit,
+        selectedComponent: null,
+      };
+
+      setCircuit(loaded);
+      pushHistory(loaded);
+      setConnectionStart(null);
+      setMousePosition(null);
+      setConnectionWaypoints([]);
+      setSelectedWireId(null);
+      setMessage(
+        "Circuito carregado com sucesso."
+      );
+    } catch {
+      setMessage(
+        "Erro ao carregar o circuito."
+      );
+    }
+  };
+
+
+  /* ==================================================
+     ZOOM
+  ================================================== */
+
+  const handleZoomIn = () => {
+    setZoom((current) =>
+      Math.min(1.8, Number((current + 0.1).toFixed(2)))
+    );
+  };
+
+  const handleZoomOut = () => {
+    setZoom((current) =>
+      Math.max(0.6, Number((current - 0.1).toFixed(2)))
+    );
+  };
+
+  const handleZoomReset = () => {
+    setZoom(1);
+  };
+
+
+  /* ==================================================
+     ATALHOS DE TECLADO
+  ================================================== */
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      // Esc → cancela conexão ou desmarca fio
+      if (event.key === "Escape") {
+        if (connectionStart) {
+          setConnectionStart(null);
+          setMousePosition(null);
+          setConnectionWaypoints([]);
+          setMessage("Conexão cancelada.");
+        } else if (selectedWireId) {
+          setSelectedWireId(null);
+          setMessage("Seleção de fio removida.");
+        }
+        return;
+      }
+
+      // Delete / Backspace → remove fio selecionado
+      if (
+        (event.key === "Delete" || event.key === "Backspace") &&
+        selectedWireId &&
+        !connectionStart
+      ) {
+        // Evita apagar texto se estiver em input
+        if (
+          event.target.tagName === "INPUT" ||
+          event.target.tagName === "TEXTAREA"
+        ) {
+          return;
+        }
+
+        event.preventDefault();
+        handleDeleteSelectedWire();
+        return;
+      }
+
+      // Ctrl+Z ou Cmd+Z → desfazer
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.key.toLowerCase() === "z"
+      ) {
+        event.preventDefault();
+        handleUndo();
+      }
+    };
+
+    window.addEventListener(
+      "keydown",
+      handleKeyDown
+    );
+
+    return () => {
+      window.removeEventListener(
+        "keydown",
+        handleKeyDown
+      );
+    };
+  }, [connectionStart, selectedWireId, historyIndex, history]);
+
+
+  /* ==================================================
      SELECIONAR COMPONENTE
   ================================================== */
 
   const handleSelectComponent = (
     componentId
   ) => {
+    setSelectedWireId(null);
 
     setCircuit((current) =>
       selectComponent(
@@ -677,6 +970,12 @@ console.log(
         "mouseup",
         handleMouseUp
       );
+
+      // Registra o estado final do arrasto no histórico
+      setCircuit((current) => {
+        pushHistory(current);
+        return current;
+      });
     };
 
 
@@ -812,6 +1111,9 @@ console.log(
       terminalKey,
     });
 
+    // Limpa waypoints ao iniciar nova conexão
+    setConnectionWaypoints([]);
+
 
     if (
       event &&
@@ -836,7 +1138,7 @@ console.log(
 
 
     setMessage(
-      `Conexão iniciada em ${component.name} — terminal ${terminal.label}.`
+      `Conexão iniciada em ${component.name} — terminal ${terminal.label}. Clique no quadro para adicionar pontos ou em um terminal para finalizar.`
     );
   };
 
@@ -914,6 +1216,7 @@ console.log(
 
       setConnectionStart(null);
       setMousePosition(null);
+      setConnectionWaypoints([]);
 
       return;
     }
@@ -950,6 +1253,7 @@ console.log(
 
       setConnectionStart(null);
       setMousePosition(null);
+      setConnectionWaypoints([]);
 
       return;
     }
@@ -1021,13 +1325,14 @@ console.log(
 
       setConnectionStart(null);
       setMousePosition(null);
+      setConnectionWaypoints([]);
 
       return;
     }
 
 
     /* ==================================================
-       CRIAR CONEXÃO
+       CRIAR CONEXÃO (com waypoints manuais)
     ================================================== */
 
     const connection =
@@ -1047,6 +1352,8 @@ console.log(
           terminalId:
             target.terminalId,
         },
+
+        points: connectionWaypoints,
       });
 
 
@@ -1058,6 +1365,7 @@ console.log(
 
       setConnectionStart(null);
       setMousePosition(null);
+      setConnectionWaypoints([]);
 
       return;
     }
@@ -1067,7 +1375,7 @@ console.log(
        ADICIONAR AO CIRCUITO
     ================================================== */
 
-    setCircuit((current) => ({
+    updateCircuit((current) => ({
       ...current,
 
       wires: [
@@ -1078,12 +1386,13 @@ console.log(
 
 
     setMessage(
-      `Conexão criada: ${fromComponent.name} → ${toComponent.name}.`
+      `Conexão criada: ${fromComponent.name} → ${toComponent.name}${connectionWaypoints.length > 0 ? ` (${connectionWaypoints.length} ponto${connectionWaypoints.length > 1 ? "s" : ""})` : ""}.`
     );
 
 
     setConnectionStart(null);
     setMousePosition(null);
+    setConnectionWaypoints([]);
   };
 
 
@@ -1138,11 +1447,54 @@ console.log(
 
     setConnectionStart(null);
     setMousePosition(null);
+    setConnectionWaypoints([]);
 
 
     setMessage(
       "Conexão cancelada."
     );
+  };
+
+
+  /* ==================================================
+     SELECIONAR FIO
+  ================================================== */
+
+  const handleSelectWire = (wireId) => {
+    if (connectionStart) {
+      return;
+    }
+
+    setSelectedWireId(wireId);
+    setCircuit((current) => ({
+      ...current,
+      selectedComponent: null,
+    }));
+
+    setMessage(
+      "Fio selecionado. Pressione Delete para remover."
+    );
+  };
+
+
+  /* ==================================================
+     REMOVER FIO SELECIONADO
+  ================================================== */
+
+  const handleDeleteSelectedWire = () => {
+    if (!selectedWireId) {
+      return;
+    }
+
+    updateCircuit((current) => ({
+      ...current,
+      wires: (current.wires || []).filter(
+        (wire) => wire.id !== selectedWireId
+      ),
+    }));
+
+    setSelectedWireId(null);
+    setMessage("Fio removido do circuito.");
   };
 
 
@@ -1193,7 +1545,7 @@ console.log(
 
     if (existing) {
 
-      setCircuit((current) => {
+      updateCircuit((current) => {
 
         const withoutConnections =
           removeComponentConnections(
@@ -1232,7 +1584,7 @@ console.log(
        ADICIONAR
     ================================================== */
 
-    setCircuit((current) =>
+    updateCircuit((current) =>
       addComponent(
         current,
         catalogItem
@@ -1252,33 +1604,58 @@ console.log(
 
   const handleBoardClick = (event) => {
 
+    const board = boardRef.current;
+
+    if (!board) {
+      return;
+    }
+
+    /*
+     * Durante uma conexão: clique no quadro adiciona
+     * um ponto intermediário (waypoint) no fio.
+     */
     if (connectionStart) {
-      cancelConnection();
+      // Ignora cliques que vieram de terminais/componentes
+      const isBoardBackground =
+        event.target === board ||
+        event.target.classList?.contains("circuit-board") ||
+        event.target.classList?.contains("circuit-grid-background") ||
+        event.target.classList?.contains("connection-layer") ||
+        event.target.closest?.(".connection-layer");
+
+      if (!isBoardBackground) {
+        return;
+      }
+
+      const rect = board.getBoundingClientRect();
+
+      const point = {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+      };
+
+      setConnectionWaypoints((prev) => [...prev, point]);
+
+      setMessage(
+        `Ponto ${connectionWaypoints.length + 1} adicionado. Clique em outro ponto ou em um terminal para finalizar. (Esc para cancelar)`
+      );
+
       return;
     }
 
     /*
      * Só desmarca a seleção quando o clique
      * é no fundo do quadro (área vazia).
-     * Cliques em componentes/filhos não devem
-     * limpar a seleção.
      */
-    const board = boardRef.current;
-
     if (
-      !board ||
-      (
-        event.target !== board &&
-        !event.target.classList?.contains(
-          "circuit-board"
-        ) &&
-        !event.target.classList?.contains(
-          "circuit-grid-background"
-        )
-      )
+      event.target !== board &&
+      !event.target.classList?.contains("circuit-board") &&
+      !event.target.classList?.contains("circuit-grid-background")
     ) {
       return;
     }
+
+    setSelectedWireId(null);
 
     setCircuit((current) => ({
       ...current,
@@ -1292,17 +1669,19 @@ console.log(
   ================================================== */
 
   const handleReset = () => {
+    const initial = createInitialCircuit();
 
-    setCircuit(
-      createInitialCircuit()
-    );
+    setCircuit(initial);
+    pushHistory(initial);
 
     setConnectionStart(null);
     setMousePosition(null);
-
+    setConnectionWaypoints([]);
+    setSelectedWireId(null);
+    setZoom(1);
 
     setMessage(
-      "Laboratório restaurado ao circuito inicial."
+      "Quadro limpo. Monte seu circuito do zero."
     );
   };
 
@@ -1326,7 +1705,7 @@ console.log(
     }
 
 
-    setCircuit((current) =>
+    updateCircuit((current) =>
       updateComponent(
         current,
         resistor.id,
@@ -1343,32 +1722,70 @@ console.log(
   ================================================== */
 
   const handleSwitchToggle = () => {
+    const controlTypes = [
+      COMPONENT_TYPES.SWITCH,
+      COMPONENT_TYPES.PUSH_BUTTON_NO,
+      COMPONENT_TYPES.PUSH_BUTTON_NC,
+      COMPONENT_TYPES.CONTACTOR,
+      COMPONENT_TYPES.BREAKER,
+    ];
 
-    if (!switchComponent) {
+    // Prioriza o componente selecionado se for de comando
+    const targetId =
+      selectedComponent &&
+      controlTypes.includes(selectedComponent.type)
+        ? selectedComponent.id
+        : switchComponent?.id;
+
+    if (!targetId) {
+      setMessage("Nenhum interruptor ou comando no circuito.");
       return;
     }
 
+    let nextValue = false;
+    let targetType = COMPONENT_TYPES.SWITCH;
+    let targetName = "Interruptor";
 
-    const nextValue =
-      !switchComponent.value;
+    updateCircuit((current) => {
+      const live = (current.components || []).find(
+        (component) => component.id === targetId
+      );
 
+      if (!live) {
+        return current;
+      }
 
-    setCircuit((current) =>
-      updateComponent(
-        current,
-        switchComponent.id,
-        {
-          value:
-            nextValue,
-        }
-      )
-    );
+      // Interpretação clara do estado atual (evita bug com string)
+      const currentlyClosed =
+        live.value === true ||
+        live.value === 1 ||
+        live.value === "1" ||
+        live.value === "true" ||
+        live.value === "on";
 
+      nextValue = !currentlyClosed;
+      targetType = live.type;
+      targetName = live.name || "Componente";
+
+      return updateComponent(current, live.id, {
+        value: nextValue,
+      });
+    });
+
+    const labels = {
+      [COMPONENT_TYPES.SWITCH]: "Interruptor",
+      [COMPONENT_TYPES.PUSH_BUTTON_NO]: "Botoeira NA",
+      [COMPONENT_TYPES.PUSH_BUTTON_NC]: "Botoeira NF",
+      [COMPONENT_TYPES.CONTACTOR]: "Contator",
+      [COMPONENT_TYPES.BREAKER]: "Disjuntor",
+    };
+
+    const name = labels[targetType] || targetName;
 
     setMessage(
       nextValue
-        ? "Interruptor fechado. Verificando circuito..."
-        : "Interruptor aberto."
+        ? `${name} FECHADO — corrente pode passar.`
+        : `${name} ABERTO — corrente interrompida.`
     );
   };
 
@@ -1392,7 +1809,7 @@ console.log(
       );
 
 
-    setCircuit((current) =>
+    updateCircuit((current) =>
       updateComponent(
         current,
         selectedComponent.id,
@@ -1677,11 +2094,51 @@ console.log(
 
           <button
             type="button"
+            className="laboratory-action-button"
+            onClick={handleUndo}
+            title="Desfazer (Ctrl+Z)"
+            disabled={historyIndex <= 0}
+          >
+            <Undo2 size={18} />
+            Desfazer
+          </button>
+
+          <button
+            type="button"
+            className="laboratory-action-button"
+            onClick={handleSaveCircuit}
+            title="Salvar circuito"
+          >
+            <Save size={18} />
+            Salvar
+          </button>
+
+          <button
+            type="button"
+            className="laboratory-action-button"
+            onClick={handleLoadCircuit}
+            title="Carregar circuito"
+          >
+            <FolderOpen size={18} />
+            Carregar
+          </button>
+
+          <button
+            type="button"
+            className="laboratory-action-button laboratory-validate-button"
+            onClick={handleValidateExercise}
+            title="Validar exercício"
+          >
+            <ClipboardCheck size={18} />
+            Validar
+          </button>
+
+          <button
+            type="button"
             className="laboratory-reset-button"
             onClick={handleReset}
           >
             <RotateCcw size={18} />
-
             Restaurar
           </button>
 
@@ -1729,8 +2186,40 @@ console.log(
         <div className="toolbar-message">
 
           {connectionStart
-            ? "Mova o mouse até outro terminal para conectar."
+            ? "Mova o mouse até outro terminal para conectar. (Esc para cancelar)"
             : message}
+
+        </div>
+
+
+        <div className="toolbar-zoom">
+
+          <button
+            type="button"
+            className="zoom-button"
+            onClick={handleZoomOut}
+            title="Diminuir zoom"
+          >
+            <ZoomOut size={16} />
+          </button>
+
+          <button
+            type="button"
+            className="zoom-button zoom-value"
+            onClick={handleZoomReset}
+            title="Resetar zoom"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+
+          <button
+            type="button"
+            className="zoom-button"
+            onClick={handleZoomIn}
+            title="Aumentar zoom"
+          >
+            <ZoomIn size={16} />
+          </button>
 
         </div>
 
@@ -1795,7 +2284,7 @@ console.log(
 
                   onClick={() => {
 
-                    setCircuit((current) => {
+                    updateCircuit((current) => {
 
                       const withoutConnections =
                         removeComponentConnections(
@@ -1893,8 +2382,13 @@ console.log(
 
               {typeof selectedComponent.value ===
                 "boolean" &&
-                selectedComponent.type ===
-                  COMPONENT_TYPES.SWITCH && (
+                [
+                  COMPONENT_TYPES.SWITCH,
+                  COMPONENT_TYPES.PUSH_BUTTON_NO,
+                  COMPONENT_TYPES.PUSH_BUTTON_NC,
+                  COMPONENT_TYPES.CONTACTOR,
+                  COMPONENT_TYPES.BREAKER,
+                ].includes(selectedComponent.type) && (
 
                 <label>
 
@@ -1909,8 +2403,8 @@ console.log(
                     onClick={handleSwitchToggle}
                   >
                     {selectedComponent.value
-                      ? "Desligar"
-                      : "Ligar"}
+                      ? "Desligar / Abrir"
+                      : "Ligar / Fechar"}
                   </button>
 
                 </label>
@@ -2117,6 +2611,72 @@ console.log(
 
 
           {/* ==================================================
+              EXERCÍCIO ATIVO
+          ================================================== */}
+
+          {activeExercise && (
+            <div className="exercise-banner">
+              <div className="exercise-banner-content">
+                <ClipboardCheck size={20} />
+                <div>
+                  <strong>{activeExercise.title}</strong>
+                  <p>{activeExercise.description}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="exercise-banner-close"
+                onClick={handleClearExercise}
+                title="Sair do exercício"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          )}
+
+          {/* ==================================================
+              RESULTADO DA VALIDAÇÃO
+          ================================================== */}
+
+          {validationResult && (
+            <div
+              className={`validation-panel ${
+                validationResult.ok ? "validation-ok" : "validation-fail"
+              }`}
+            >
+              <div className="validation-header">
+                <strong>
+                  {validationResult.ok
+                    ? "Exercício concluído!"
+                    : "Validação"}
+                </strong>
+                <span>
+                  {validationResult.passedCount}/
+                  {validationResult.total} · {validationResult.score}%
+                </span>
+              </div>
+              <ul className="validation-checks">
+                {validationResult.checks.map((check) => (
+                  <li
+                    key={check.id}
+                    className={
+                      check.passed ? "check-passed" : "check-failed"
+                    }
+                  >
+                    <span className="check-mark">
+                      {check.passed ? "✓" : "✗"}
+                    </span>
+                    <span>
+                      <strong>{check.label}</strong>
+                      <small>{check.detail}</small>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* ==================================================
               DIAGNÓSTICO
           ================================================== */}
 
@@ -2163,6 +2723,10 @@ console.log(
                 ? "connection-mode"
                 : ""
             }`}
+            style={{
+              transform: `scale(${zoom})`,
+              transformOrigin: "top left",
+            }}
             onClick={
               handleBoardClick
             }
@@ -2190,6 +2754,18 @@ console.log(
               }
               mousePosition={
                 mousePosition
+              }
+              waypoints={
+                connectionWaypoints
+              }
+              selectedWireId={
+                selectedWireId
+              }
+              onSelectWire={
+                handleSelectWire
+              }
+              onEmptyClick={
+                handleBoardClick
               }
               energized={
                 simulation.energized
@@ -2234,6 +2810,10 @@ console.log(
                     getComponentPower(
                       component
                     )
+                  }
+
+                  connectionStart={
+                    connectionStart
                   }
 
                   onSelect={

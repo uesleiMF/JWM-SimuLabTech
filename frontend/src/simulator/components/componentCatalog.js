@@ -5,11 +5,19 @@ import {
   Minus,
   Power,
   Zap,
+  ToggleLeft,
+  ToggleRight,
+  Box,
+  Circle,
+  Shield,
 } from "lucide-react";
 
 import { COMPONENT_TYPES } from "./componentTypes";
 
 export const componentCatalog = [
+  /* ==================================================
+     FONTES
+  ================================================== */
   {
     id: COMPONENT_TYPES.SOURCE,
     name: "Fonte DC",
@@ -21,6 +29,9 @@ export const componentCatalog = [
     unit: "V",
   },
 
+  /* ==================================================
+     PASSIVOS
+  ================================================== */
   {
     id: COMPONENT_TYPES.RESISTOR,
     name: "Resistor",
@@ -31,7 +42,6 @@ export const componentCatalog = [
     defaultValue: 50,
     unit: "Ω",
   },
-
   {
     id: COMPONENT_TYPES.CAPACITOR,
     name: "Capacitor",
@@ -42,7 +52,6 @@ export const componentCatalog = [
     defaultValue: 100,
     unit: "µF",
   },
-
   {
     id: COMPONENT_TYPES.INDUCTOR,
     name: "Indutor",
@@ -54,6 +63,9 @@ export const componentCatalog = [
     unit: "mH",
   },
 
+  /* ==================================================
+     CONTROLE BÁSICO
+  ================================================== */
   {
     id: COMPONENT_TYPES.SWITCH,
     name: "Interruptor",
@@ -65,6 +77,63 @@ export const componentCatalog = [
     unit: "",
   },
 
+  /* ==================================================
+     COMANDOS ELÉTRICOS
+  ================================================== */
+  {
+    id: COMPONENT_TYPES.PUSH_BUTTON_NO,
+    name: "Botoeira NA",
+    description: "Botão normalmente aberto (fecha ao pressionar)",
+    category: "comandos",
+    icon: ToggleLeft,
+    color: "#16a34a",
+    defaultValue: false,
+    unit: "",
+  },
+  {
+    id: COMPONENT_TYPES.PUSH_BUTTON_NC,
+    name: "Botoeira NF",
+    description: "Botão normalmente fechado (abre ao pressionar)",
+    category: "comandos",
+    icon: ToggleRight,
+    color: "#dc2626",
+    defaultValue: true,
+    unit: "",
+  },
+  {
+    id: COMPONENT_TYPES.CONTACTOR,
+    name: "Contator",
+    description: "Contatos de potência (fecha quando energizado)",
+    category: "comandos",
+    icon: Box,
+    color: "#7c3aed",
+    defaultValue: false,
+    unit: "",
+  },
+  {
+    id: COMPONENT_TYPES.BREAKER,
+    name: "Disjuntor",
+    description: "Proteção e seccionamento do circuito",
+    category: "comandos",
+    icon: Shield,
+    color: "#ea580c",
+    defaultValue: true,
+    unit: "",
+  },
+  {
+    id: COMPONENT_TYPES.INDICATOR,
+    name: "Sinalizador",
+    description: "Lâmpada de sinalização (verde/vermelho)",
+    category: "comandos",
+    icon: Circle,
+    color: "#22c55e",
+    defaultValue: false,
+    unit: "",
+  },
+
+  /* ==================================================
+     CARGAS
+  ================================================== */
   {
     id: COMPONENT_TYPES.LAMP,
     name: "Lâmpada",
@@ -75,7 +144,6 @@ export const componentCatalog = [
     defaultValue: false,
     unit: "",
   },
-
   {
     id: COMPONENT_TYPES.MOTOR,
     name: "Motor DC",
@@ -86,7 +154,6 @@ export const componentCatalog = [
     defaultValue: false,
     unit: "",
   },
-
   {
     id: COMPONENT_TYPES.LED,
     name: "LED",

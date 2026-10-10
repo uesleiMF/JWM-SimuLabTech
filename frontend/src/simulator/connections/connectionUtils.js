@@ -265,6 +265,7 @@ export function parseTerminalKey(terminalKey) {
 export function createElectricalConnection({
   from,
   to,
+  points = [],
 }) {
   if (!from || !to) {
     return null;
@@ -279,6 +280,9 @@ export function createElectricalConnection({
 
     from,
     to,
+
+    // Pontos intermediários para roteamento manual (waypoints)
+    points: Array.isArray(points) ? points : [],
 
     status: "active",
 

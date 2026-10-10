@@ -88,6 +88,43 @@
   transform: translateY(1px);
 }
 
+.laboratory-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid #dbe4ef;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.laboratory-action-button:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #bfdbfe;
+  color: #2563eb;
+}
+
+.laboratory-action-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.laboratory-action-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 
 /* ==================================================
    TOOLBAR
@@ -146,6 +183,45 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.toolbar-zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 12px;
+  border-left: 1px solid #e2e8f0;
+  flex: 0 0 auto;
+}
+
+.zoom-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.zoom-button:hover {
+  background: #f8fafc;
+  border-color: #bfdbfe;
+  color: #2563eb;
+}
+
+.zoom-button.zoom-value {
+  min-width: 52px;
 }
 
 
@@ -583,11 +659,16 @@
   min-width: 0;
   min-height: 560px;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: auto;
   border: 1px solid #dbe4ef;
   border-radius: 18px;
   background-color: #f8fafc;
   isolation: isolate;
+  transition: transform 0.15s ease;
+}
+
+.circuit-board.connection-mode {
+  cursor: crosshair;
 }
 
 
@@ -637,9 +718,18 @@
   height: 100%;
   display: block;
   z-index: 2;
-  pointer-events: none;
+  pointer-events: auto;
   overflow: visible;
   box-sizing: border-box;
+}
+
+/* Permite clicar nos fios sem bloquear o quadro */
+.connection-layer .circuit-connection {
+  pointer-events: auto;
+}
+
+.connection-layer .connection-preview {
+  pointer-events: none;
 }
 
 
@@ -650,11 +740,11 @@
 .component-node {
   position: absolute;
 
-  width: 145px;
-  height: 116px;
+  width: 92px;
+  height: 76px;
 
-  min-width: 145px;
-  min-height: 116px;
+  min-width: 92px;
+  min-height: 76px;
 
   box-sizing: border-box;
 
@@ -663,15 +753,15 @@
   align-items: center;
   justify-content: center;
 
-  padding: 14px;
+  padding: 6px 8px;
 
   border: 2px solid #f59e0b;
-  border-radius: 16px;
+  border-radius: 12px;
 
   background: #ffffff;
 
   box-shadow:
-    0 8px 20px rgba(15, 23, 42, 0.08);
+    0 4px 12px rgba(15, 23, 42, 0.08);
 
   cursor: grab;
   user-select: none;
@@ -691,7 +781,7 @@
 
 .component-node:hover {
   box-shadow:
-    0 12px 28px rgba(15, 23, 42, 0.12);
+    0 6px 16px rgba(15, 23, 42, 0.12);
 }
 
 .component-node:active {
@@ -702,8 +792,8 @@
   border-color: #2563eb;
 
   box-shadow:
-    0 0 0 3px rgba(37, 99, 235, 0.15),
-    0 12px 28px rgba(15, 23, 42, 0.12);
+    0 0 0 2px rgba(37, 99, 235, 0.18),
+    0 6px 16px rgba(15, 23, 42, 0.12);
 
   z-index: 20;
 }
@@ -720,7 +810,7 @@
 
   box-shadow:
     0 0 0 1px rgba(245, 158, 11, 0.12),
-    0 12px 28px rgba(245, 158, 11, 0.16);
+    0 6px 16px rgba(245, 158, 11, 0.16);
 }
 
 
@@ -749,11 +839,11 @@
 .component-node strong {
   display: block;
   max-width: 100%;
-  margin-top: 5px;
+  margin-top: 3px;
   color: #1e293b;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 800;
-  line-height: 1.25;
+  line-height: 1.2;
   text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -764,11 +854,11 @@
 .component-node small {
   display: block;
   max-width: 100%;
-  margin-top: 3px;
+  margin-top: 1px;
   color: #64748b;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 1.15;
   text-align: center;
   pointer-events: none;
 }
@@ -783,8 +873,8 @@
 
   top: 50%;
 
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
 
   display: flex;
   align-items: center;
@@ -801,11 +891,11 @@
 }
 
 .component-terminal-left {
-  left: -14px;
+  left: -11px;
 }
 
 .component-terminal-right {
-  right: -14px;
+  right: -11px;
 }
 
 
@@ -814,8 +904,8 @@
 ================================================== */
 
 .component-terminal-dot {
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
 
   display: flex;
   align-items: center;
@@ -829,11 +919,11 @@
   background: #ffffff;
   color: #2563eb;
 
-  font-size: 9px;
+  font-size: 8px;
   font-weight: 800;
 
   box-shadow:
-    0 2px 6px rgba(15, 23, 42, 0.15);
+    0 1px 4px rgba(15, 23, 42, 0.15);
 
   transition:
     transform 0.15s ease,
@@ -844,14 +934,14 @@
 }
 
 .component-terminal:hover .component-terminal-dot {
-  transform: scale(1.25);
+  transform: scale(1.3);
 
   background: #2563eb;
   color: #ffffff;
 
   box-shadow:
-    0 0 0 4px rgba(37, 99, 235, 0.15),
-    0 3px 10px rgba(15, 23, 42, 0.2);
+    0 0 0 3px rgba(37, 99, 235, 0.18),
+    0 2px 6px rgba(15, 23, 42, 0.2);
 }
 
 .component-node.selected .component-terminal-dot {
@@ -980,13 +1070,13 @@
 ================================================== */
 
 .circuit-connection {
-  pointer-events: none;
+  pointer-events: auto;
   opacity: 1;
 }
 
 .circuit-connection .connection-wire {
   stroke: #64748b;
-  stroke-width: 3;
+  stroke-width: 2.5;
   fill: none;
 
   stroke-linecap: round;
@@ -996,6 +1086,17 @@
     stroke 0.3s ease,
     stroke-width 0.3s ease,
     filter 0.3s ease;
+}
+
+/* Fio selecionado */
+.circuit-connection.selected .connection-wire {
+  stroke: #2563eb;
+  stroke-width: 3.5;
+  filter: drop-shadow(0 0 4px rgba(37, 99, 235, 0.55));
+}
+
+.circuit-connection.selected .connection-point {
+  fill: #2563eb;
 }
 
 .circuit-connection .connection-point {
@@ -1105,14 +1206,11 @@
 .connection-preview line {
   stroke: #2563eb;
   stroke-width: 3;
-
   stroke-linecap: round;
-
   stroke-dasharray: 8 6;
-
-  opacity: 0.75;
-
+  opacity: 0.85;
   vector-effect: non-scaling-stroke;
+  animation: connectionDash 0.6s linear infinite;
 }
 
 .connection-preview-point {
@@ -1120,12 +1218,27 @@
   stroke: #ffffff;
   stroke-width: 3;
   vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 4px rgba(37, 99, 235, 0.45));
+}
+
+@keyframes connectionDash {
+  to {
+    stroke-dashoffset: -14;
+  }
 }
 
 .connection-target {
   fill: #eff6ff;
   stroke: #2563eb;
   stroke-width: 3;
+}
+
+.connection-waypoint {
+  fill: #2563eb;
+  stroke: #ffffff;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 3px rgba(37, 99, 235, 0.5));
 }
 
 
@@ -2333,4 +2446,573 @@
   .component-node-icon.is-spinning svg {
     animation: motorSpin 0.7s linear infinite !important;
   }
+}
+/* ==================================================
+   BOTÕES DE AÇÃO (Desfazer / Salvar / Carregar)
+================================================== */
+
+.laboratory-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid #dbe4ef;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.laboratory-action-button:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #bfdbfe;
+  color: #2563eb;
+}
+
+.laboratory-action-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.laboratory-action-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+
+/* ==================================================
+   ZOOM NA TOOLBAR
+================================================== */
+
+.toolbar-zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 12px;
+  border-left: 1px solid #e2e8f0;
+  flex: 0 0 auto;
+}
+
+.zoom-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.zoom-button:hover {
+  background: #f8fafc;
+  border-color: #bfdbfe;
+  color: #2563eb;
+}
+
+.zoom-button.zoom-value {
+  min-width: 52px;
+}
+
+
+/* ==================================================
+   BOARD + MODO CONEXÃO
+================================================== */
+
+.circuit-board {
+  overflow: auto;
+  transition: transform 0.15s ease;
+}
+
+.circuit-board.connection-mode {
+  cursor: crosshair;
+}
+
+
+/* ==================================================
+   LINHA TEMPORÁRIA DE CONEXÃO
+================================================== */
+
+.connection-preview line {
+  stroke: #2563eb;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 8 6;
+  opacity: 0.85;
+  vector-effect: non-scaling-stroke;
+  animation: connectionDash 0.6s linear infinite;
+}
+
+.connection-preview-point {
+  fill: #2563eb;
+  stroke: #ffffff;
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 4px rgba(37, 99, 235, 0.45));
+}
+
+@keyframes connectionDash {
+  to {
+    stroke-dashoffset: -14;
+  }
+}
+/* ==================================================
+   JWM SIMULABTECH — COMPONENTES COMPACTOS
+   Preparação para desenho manual de circuitos
+================================================== */
+
+.component-node {
+  width: 112px !important;
+  height: 82px !important;
+
+  min-width: 112px !important;
+  min-height: 82px !important;
+
+  box-sizing: border-box;
+  padding: 6px !important;
+
+  border-width: 1.5px !important;
+  border-radius: 8px !important;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.07);
+
+  transition:
+    box-shadow 0.15s ease,
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+/* ==================================================
+   ÍCONES DOS COMPONENTES
+================================================== */
+
+.component-node .component-node-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 22px;
+  height: 22px;
+
+  margin: 0;
+  padding: 0;
+
+  flex-shrink: 0;
+}
+
+.component-node .component-node-icon svg {
+  display: block;
+
+  width: 20px !important;
+  height: 20px !important;
+
+  max-width: 20px;
+  max-height: 20px;
+
+  stroke-width: 1.8;
+}
+
+/* ==================================================
+   NOME DO COMPONENTE
+================================================== */
+
+.component-node strong {
+  display: block;
+
+  margin: 2px 0 0 !important;
+  padding: 0;
+
+  max-width: 100%;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  font-size: 10px !important;
+  font-weight: 700;
+  line-height: 1.15;
+
+  text-align: center;
+}
+
+/* ==================================================
+   VALOR DO COMPONENTE
+================================================== */
+
+.component-node small {
+  display: block;
+
+  margin: 1px 0 0 !important;
+  padding: 0;
+
+  max-width: 100%;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  font-size: 9px !important;
+  font-weight: 400;
+  line-height: 1.1;
+
+  text-align: center;
+}
+
+/* ==================================================
+   TERMINAIS ELÉTRICOS
+   Mantém uma área clicável confortável
+================================================== */
+
+.component-node .component-terminal {
+  position: absolute;
+
+  width: 24px;
+  height: 24px;
+
+  top: 50%;
+  z-index: 50;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  box-sizing: border-box;
+
+  transform: translateY(-50%);
+
+  cursor: crosshair;
+  pointer-events: auto;
+}
+
+/* Terminal esquerdo */
+
+.component-node .component-terminal-left {
+  left: -12px;
+}
+
+/* Terminal direito */
+
+.component-node .component-terminal-right {
+  right: -12px;
+}
+
+/* ==================================================
+   CÍRCULO VISÍVEL DOS TERMINAIS
+================================================== */
+
+.component-node .component-terminal-dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 14px;
+  height: 14px;
+
+  box-sizing: border-box;
+
+  padding: 0;
+
+  border: 1.5px solid #64748b;
+  border-radius: 50%;
+
+  background: #ffffff;
+  color: #334155;
+
+  font-size: 8px;
+  font-weight: 600;
+  line-height: 1;
+
+  white-space: nowrap;
+
+  pointer-events: none;
+
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+/* Realce ao passar o mouse */
+
+.component-node .component-terminal:hover .component-terminal-dot {
+  border-color: #2563eb;
+  background-color: #eff6ff;
+}
+
+/* ==================================================
+   COMPONENTE SELECIONADO
+================================================== */
+
+.component-node.selected {
+  box-shadow:
+    0 0 0 2px rgba(37, 99, 235, 0.16),
+    0 3px 8px rgba(15, 23, 42, 0.08);
+}
+
+/* ==================================================
+   COMPONENTE ENERGIZADO
+================================================== */
+
+.component-node.energized {
+  box-shadow:
+    0 0 0 1px rgba(245, 158, 11, 0.2),
+    0 3px 10px rgba(245, 158, 11, 0.12);
+}
+
+/* ==================================================
+   TERMINAIS CONECTADOS
+================================================== */
+
+.component-terminal.connected .component-terminal-dot {
+  border-color: #16a34a;
+  background-color: #f0fdf4;
+}
+
+/* ==================================================
+   INTERRUPTOR
+================================================== */
+
+.component-node.switch-on {
+  border-color: #16a34a;
+}
+
+.component-node.switch-off {
+  border-color: #94a3b8;
+}
+
+/* ==================================================
+   LÂMPADA ACESA
+================================================== */
+
+.component-node.lamp-on {
+  border-color: #f59e0b;
+}
+
+/* ==================================================
+   LED ACESO
+================================================== */
+
+.component-node.led-on {
+  border-color: #22c55e;
+}
+
+/* ==================================================
+   MOTOR EM FUNCIONAMENTO
+================================================== */
+
+.component-node.motor-running {
+  border-color: #16a34a;
+}
+
+/* ==================================================
+   INDICADORES COMPACTOS
+================================================== */
+
+.component-node .switch-state-indicator,
+.component-node .led-energy-indicator,
+.component-node .motor-energy-indicator {
+  font-size: 8px;
+  line-height: 1.1;
+}
+
+/* ==================================================
+   COMPONENTES EM TELAS MENORES
+================================================== */
+
+@media (max-width: 768px) {
+  .component-node {
+    width: 104px !important;
+    height: 76px !important;
+
+    min-width: 104px !important;
+    min-height: 76px !important;
+
+    padding: 5px !important;
+    gap: 1px;
+  }
+
+  .component-node .component-node-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .component-node .component-node-icon svg {
+    width: 18px !important;
+    height: 18px !important;
+  }
+
+  .component-node strong {
+    font-size: 9px !important;
+  }
+
+  .component-node small {
+    font-size: 8px !important;
+  }
+}
+
+/* ==================================================
+   EXERCÍCIO ATIVO + VALIDAÇÃO
+================================================== */
+
+.exercise-banner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #bfdbfe;
+  background: linear-gradient(180deg, #eff6ff 0%, #f8fbff 100%);
+}
+
+.exercise-banner-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: #1e40af;
+}
+
+.exercise-banner-content strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 800;
+  color: #1e3a8a;
+}
+
+.exercise-banner-content p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #3b82f6;
+}
+
+.exercise-banner-close {
+  border: none;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.exercise-banner-close:hover {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.validation-panel {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+}
+
+.validation-panel.validation-ok {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.validation-panel.validation-fail {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.validation-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.validation-header span {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.validation-checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.validation-checks li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.validation-checks .check-mark {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.check-passed .check-mark {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.check-failed .check-mark {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.validation-checks strong {
+  display: block;
+  color: #0f172a;
+}
+
+.validation-checks small {
+  display: block;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.laboratory-validate-button {
+  border-color: #86efac !important;
+  color: #166534 !important;
+  background: #f0fdf4 !important;
+}
+
+.laboratory-validate-button:hover {
+  background: #dcfce7 !important;
 }

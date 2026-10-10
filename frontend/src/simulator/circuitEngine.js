@@ -7,101 +7,104 @@ import {
   calculateTauRC,
   calculateTauRL,
   chargeLevel,
+  capacitorChargeVoltage,
+  inductorCurrentRise,
   calculateCapacitorEnergy,
   calculateInductorEnergy,
 } from "./calculations";
 
 import { COMPONENT_TYPES } from "./components/componentTypes";
 
+/* ==================================================
+   CONSTANTES
+================================================== */
+
+const CONTROL_TYPES = [
+  COMPONENT_TYPES.SWITCH,
+  COMPONENT_TYPES.PUSH_BUTTON_NO,
+  COMPONENT_TYPES.PUSH_BUTTON_NC,
+  COMPONENT_TYPES.CONTACTOR,
+  COMPONENT_TYPES.BREAKER,
+];
+
+const LOAD_TYPES = [
+  COMPONENT_TYPES.LAMP,
+  COMPONENT_TYPES.INDICATOR,
+  COMPONENT_TYPES.MOTOR,
+  COMPONENT_TYPES.LED,
+];
 
 /* ==================================================
    LOCALIZAR COMPONENTE
 ================================================== */
 
-export function findComponent(
-  circuit,
-  type
-) {
+export function findComponent(circuit, type) {
   if (!Array.isArray(circuit?.components)) {
     return null;
   }
 
   return (
     circuit.components.find(
-      (component) =>
-        component?.type === type
+      (component) => component?.type === type
     ) || null
   );
 }
-
 
 /* ==================================================
    COMPONENTES PRINCIPAIS
 ================================================== */
 
 export function getSource(circuit) {
-  return findComponent(
-    circuit,
-    COMPONENT_TYPES.SOURCE
-  );
+  return findComponent(circuit, COMPONENT_TYPES.SOURCE);
 }
-
 
 export function getResistor(circuit) {
-  return findComponent(
-    circuit,
-    COMPONENT_TYPES.RESISTOR
-  );
+  return findComponent(circuit, COMPONENT_TYPES.RESISTOR);
 }
-
 
 export function getSwitch(circuit) {
-  return findComponent(
-    circuit,
-    COMPONENT_TYPES.SWITCH
+  if (!Array.isArray(circuit?.components)) {
+    return null;
+  }
+
+  /*
+   * Dá preferência ao interruptor convencional.
+   * Se não existir, procura outro dispositivo
+   * de comando compatível com o modelo atual.
+   */
+
+  return (
+    circuit.components.find(
+      (component) =>
+        component?.type === COMPONENT_TYPES.SWITCH
+    ) ||
+    circuit.components.find(
+      (component) =>
+        CONTROL_TYPES.includes(component?.type)
+    ) ||
+    null
   );
 }
-
 
 export function getLamp(circuit) {
-  return findComponent(
-    circuit,
-    COMPONENT_TYPES.LAMP
-  );
+  return findComponent(circuit, COMPONENT_TYPES.LAMP);
 }
-
 
 export function getMotor(circuit) {
-  return findComponent(
-    circuit,
-    COMPONENT_TYPES.MOTOR
-  );
+  return findComponent(circuit, COMPONENT_TYPES.MOTOR);
 }
-
 
 export function getLed(circuit) {
-  return findComponent(
-    circuit,
-    COMPONENT_TYPES.LED
-  );
+  return findComponent(circuit, COMPONENT_TYPES.LED);
 }
-
 
 export function getCapacitor(circuit) {
-  return findComponent(
-    circuit,
-    COMPONENT_TYPES.CAPACITOR
-  );
+  return findComponent(circuit, COMPONENT_TYPES.CAPACITOR);
 }
-
 
 export function getInductor(circuit) {
-  return findComponent(
-    circuit,
-    COMPONENT_TYPES.INDUCTOR
-  );
+  return findComponent(circuit, COMPONENT_TYPES.INDUCTOR);
 }
-
 
 /* ==================================================
    CARGAS
@@ -114,25 +117,22 @@ export function getLoads(circuit) {
 
   return circuit.components.filter(
     (component) =>
-      component?.type === COMPONENT_TYPES.LAMP ||
-      component?.type === COMPONENT_TYPES.MOTOR ||
-      component?.type === COMPONENT_TYPES.LED
+      LOAD_TYPES.includes(component?.type)
   );
 }
-
 
 export function getLoad(circuit) {
   return (
     getLamp(circuit) ||
     getMotor(circuit) ||
     getLed(circuit) ||
+    findComponent(circuit, COMPONENT_TYPES.INDICATOR) ||
     null
   );
 }
 
-
 /* ==================================================
-   WIRES
+   FIOS
 ================================================== */
 
 export function getConnections(circuit) {
@@ -141,18 +141,18 @@ export function getConnections(circuit) {
     : [];
 }
 
-
 /* ==================================================
    TERMINAIS
 ================================================== */
 
-export function createNodeKey(
-  componentId,
-  terminalId
-) {
+export function createNodeKey(componentId, terminalId) {
   if (
-    !componentId ||
-    !terminalId
+    componentId === undefined ||
+    componentId === null ||
+    terminalId === undefined ||
+    terminalId === null ||
+    componentId === "" ||
+    terminalId === ""
   ) {
     return null;
   }
@@ -160,15 +160,16 @@ export function createNodeKey(
   return `${componentId}:${terminalId}`;
 }
 
-
 export function getWireNodeKey(node) {
   if (!node) {
     return null;
   }
 
   if (
-    node.componentId &&
-    node.terminalId
+    node.componentId !== undefined &&
+    node.componentId !== null &&
+    node.terminalId !== undefined &&
+    node.terminalId !== null
   ) {
     return createNodeKey(
       node.componentId,
@@ -186,6 +187,40 @@ export function getWireNodeKey(node) {
   return null;
 }
 
+/* ==================================================
+   GARANTIR EXISTÊNCIA DE NÓ
+================================================== */
+
+function ensureGraphNode(graph, node) {
+  if (!graph || !node) {
+    return;
+  }
+
+  if (!graph.has(node)) {
+    graph.set(node, new Set());
+  }
+}
+
+/* ==================================================
+   ADICIONAR CONEXÃO AO GRAFO
+================================================== */
+
+function addGraphConnection(graph, first, second) {
+  if (
+    !graph ||
+    !first ||
+    !second ||
+    first === second
+  ) {
+    return;
+  }
+
+  ensureGraphNode(graph, first);
+  ensureGraphNode(graph, second);
+
+  graph.get(first).add(second);
+  graph.get(second).add(first);
+}
 
 /* ==================================================
    CONEXÃO INTERNA
@@ -197,48 +232,22 @@ function addInternalConnection(
   firstTerminal,
   secondTerminal
 ) {
-  const first =
-    createNodeKey(
-      componentId,
-      firstTerminal
-    );
+  const first = createNodeKey(
+    componentId,
+    firstTerminal
+  );
 
-  const second =
-    createNodeKey(
-      componentId,
-      secondTerminal
-    );
+  const second = createNodeKey(
+    componentId,
+    secondTerminal
+  );
 
-  if (
-    !first ||
-    !second
-  ) {
-    return;
-  }
-
-  if (!graph.has(first)) {
-    graph.set(
-      first,
-      new Set()
-    );
-  }
-
-  if (!graph.has(second)) {
-    graph.set(
-      second,
-      new Set()
-    );
-  }
-
-  graph
-    .get(first)
-    .add(second);
-
-  graph
-    .get(second)
-    .add(first);
+  addGraphConnection(
+    graph,
+    first,
+    second
+  );
 }
-
 
 /* ==================================================
    REMOVER CONEXÃO DO GRAFO
@@ -249,26 +258,16 @@ function removeGraphConnection(
   first,
   second
 ) {
-  if (!graph) {
+  if (!graph || !first || !second) {
     return;
   }
 
-  if (graph.has(first)) {
-    graph
-      .get(first)
-      .delete(second);
-  }
-
-  if (graph.has(second)) {
-    graph
-      .get(second)
-      .delete(first);
-  }
+  graph.get(first)?.delete(second);
+  graph.get(second)?.delete(first);
 }
 
-
 /* ==================================================
-   REMOVER CONEXÃO INTERNA DE UM COMPONENTE
+   REMOVER CONEXÃO INTERNA DE COMPONENTE
 ================================================== */
 
 function removeComponentInternalConnection(
@@ -281,17 +280,15 @@ function removeComponentInternalConnection(
     return;
   }
 
-  const first =
-    createNodeKey(
-      component.id,
-      firstTerminal
-    );
+  const first = createNodeKey(
+    component.id,
+    firstTerminal
+  );
 
-  const second =
-    createNodeKey(
-      component.id,
-      secondTerminal
-    );
+  const second = createNodeKey(
+    component.id,
+    secondTerminal
+  );
 
   removeGraphConnection(
     graph,
@@ -300,118 +297,136 @@ function removeComponentInternalConnection(
   );
 }
 
-
 /* ==================================================
-   COMPONENTE ESTÁ HABILITADO
+   COMPONENTE HABILITADO
 ================================================== */
 
-function isComponentEnabled(
-  component
-) {
-  return (
-    Boolean(component) &&
-    component.enabled !== false
-  );
+function isComponentEnabled(component) {
+  return Boolean(component) &&
+    component.enabled !== false;
 }
 
-
 /* ==================================================
-   INTERRUPTOR ESTÁ FECHADO
+   ESTADO LÓGICO
 ================================================== */
 
-function isSwitchClosed(
-  switchComponent
-) {
+function normalizeBoolean(value, fallback = false) {
+  if (value === true || value === 1 || value === "1") {
+    return true;
+  }
+
+  if (value === false || value === 0 || value === "0") {
+    return false;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+
+    if (normalized === "true" || normalized === "on") {
+      return true;
+    }
+
+    if (normalized === "false" || normalized === "off") {
+      return false;
+    }
+  }
+
+  return fallback;
+}
+
+/* ==================================================
+   INTERRUPTOR FECHADO
+================================================== */
+
+function isSwitchClosed(switchComponent) {
   if (!switchComponent) {
     return false;
   }
 
-  return (
-    switchComponent.value === true ||
-    switchComponent.value === "true" ||
-    switchComponent.value === 1 ||
-    switchComponent.value === "1"
+  return normalizeBoolean(
+    switchComponent.value,
+    false
   );
 }
 
-
 /* ==================================================
-   FONTE ESTÁ LIGADA
+   DISPOSITIVO DE COMANDO FECHADO
 ================================================== */
 
-function isSourceEnabled(
-  source
-) {
-  if (!source) {
+/*
+ * Neste modelo, value === true significa
+ * que os terminais input e output conduzem.
+ *
+ * Para a botoeira normalmente fechada, o estado
+ * padrão precisa ser configurado no próprio
+ * componente como true quando não pressionada.
+ */
+
+function isControlDeviceClosed(component) {
+  if (
+    !component ||
+    !CONTROL_TYPES.includes(component.type)
+  ) {
     return false;
   }
 
-  /*
-   * Se enabled não existir, consideramos
-   * a fonte habilitada.
-   *
-   * Isso evita que um componente criado
-   * anteriormente sem essa propriedade
-   * fique inutilmente desligado.
-   */
-  return (
-    source.enabled !== false
-  );
+  if (!isComponentEnabled(component)) {
+    return false;
+  }
+
+  return isSwitchClosed(component);
 }
 
+/* ==================================================
+   FONTE LIGADA
+================================================== */
+
+function isSourceEnabled(source) {
+  return Boolean(source) &&
+    source.enabled !== false;
+}
 
 /* ==================================================
-   CONEXÕES INTERNAS DOS COMPONENTES
+   ADICIONAR CONEXÕES INTERNAS DOS COMPONENTES
 ================================================== */
 
 function addComponentInternalConnections(
   graph,
   component
 ) {
-  if (!component?.id) {
+  if (
+    !component?.id ||
+    !isComponentEnabled(component)
+  ) {
     return;
   }
 
-  const componentId =
-    component.id;
+  const componentId = component.id;
 
   switch (component.type) {
-
     /* ==========================================
        RESISTOR
     ========================================== */
 
     case COMPONENT_TYPES.RESISTOR:
-
-      if (
-        isComponentEnabled(component)
-      ) {
-        addInternalConnection(
-          graph,
-          componentId,
-          "input",
-          "output"
-        );
-      }
-
+      addInternalConnection(
+        graph,
+        componentId,
+        "input",
+        "output"
+      );
       break;
 
-
     /* ==========================================
-       INTERRUPTOR
+       DISPOSITIVOS DE COMANDO
     ========================================== */
 
     case COMPONENT_TYPES.SWITCH:
-
-      /*
-       * O interruptor somente conduz
-       * quando está fechado.
-       */
-
-      if (
-        isSwitchClosed(component) &&
-        isComponentEnabled(component)
-      ) {
+    case COMPONENT_TYPES.PUSH_BUTTON_NO:
+    case COMPONENT_TYPES.PUSH_BUTTON_NC:
+    case COMPONENT_TYPES.CONTACTOR:
+    case COMPONENT_TYPES.BREAKER:
+      if (isControlDeviceClosed(component)) {
         addInternalConnection(
           graph,
           componentId,
@@ -419,331 +434,214 @@ function addComponentInternalConnections(
           "output"
         );
       }
-
       break;
 
-
     /* ==========================================
-       LÂMPADA
+       LÂMPADA E SINALIZADOR
     ========================================== */
 
     case COMPONENT_TYPES.LAMP:
-
-      if (
-        isComponentEnabled(component)
-      ) {
-        addInternalConnection(
-          graph,
-          componentId,
-          "input",
-          "output"
-        );
-      }
-
+    case COMPONENT_TYPES.INDICATOR:
+      addInternalConnection(
+        graph,
+        componentId,
+        "input",
+        "output"
+      );
       break;
-
 
     /* ==========================================
        MOTOR
     ========================================== */
 
     case COMPONENT_TYPES.MOTOR:
-
-      if (
-        isComponentEnabled(component)
-      ) {
-        addInternalConnection(
-          graph,
-          componentId,
-          "input",
-          "output"
-        );
-      }
-
+      addInternalConnection(
+        graph,
+        componentId,
+        "input",
+        "output"
+      );
       break;
-
 
     /* ==========================================
        LED
     ========================================== */
 
     case COMPONENT_TYPES.LED:
-
-      if (
-        isComponentEnabled(component)
-      ) {
-        addInternalConnection(
-          graph,
-          componentId,
-          "anode",
-          "cathode"
-        );
-      }
-
+      addInternalConnection(
+        graph,
+        componentId,
+        "anode",
+        "cathode"
+      );
       break;
-
 
     /* ==========================================
        INDUTOR
-       Em regime DC permanente comporta-se
-       como curto-circuito (conduz).
     ========================================== */
 
     case COMPONENT_TYPES.INDUCTOR:
-
-      if (
-        isComponentEnabled(component)
-      ) {
-        addInternalConnection(
-          graph,
-          componentId,
-          "input",
-          "output"
-        );
-      }
-
+      /*
+       * Aproximação de regime permanente DC:
+       * o indutor é representado como condutor.
+       */
+      addInternalConnection(
+        graph,
+        componentId,
+        "input",
+        "output"
+      );
       break;
-
 
     /* ==========================================
        CAPACITOR
-       Em regime DC permanente comporta-se
-       como circuito aberto (não conduz).
-       Por isso NÃO adicionamos conexão interna.
     ========================================== */
 
     case COMPONENT_TYPES.CAPACITOR:
+      /*
+       * Aproximação de regime permanente DC:
+       * o capacitor é representado como circuito aberto.
+       *
+       * A análise transitória RC é calculada separadamente
+       * por getReactiveAnalysis().
+       */
       break;
-
 
     /* ==========================================
        FONTE
     ========================================== */
 
     case COMPONENT_TYPES.SOURCE:
-
       /*
-       * Positivo e negativo NÃO são
-       * conectados internamente.
+       * Não conectar positivo e negativo internamente.
        */
-
       break;
-
 
     default:
       break;
   }
 }
 
+/* ==================================================
+   TERMINAIS DE CADA COMPONENTE
+================================================== */
+
+function getComponentTerminalIds(component) {
+  switch (component?.type) {
+    case COMPONENT_TYPES.SOURCE:
+      return ["positive", "negative"];
+
+    case COMPONENT_TYPES.LED:
+      return ["anode", "cathode"];
+
+    case COMPONENT_TYPES.RESISTOR:
+    case COMPONENT_TYPES.SWITCH:
+    case COMPONENT_TYPES.PUSH_BUTTON_NO:
+    case COMPONENT_TYPES.PUSH_BUTTON_NC:
+    case COMPONENT_TYPES.CONTACTOR:
+    case COMPONENT_TYPES.BREAKER:
+    case COMPONENT_TYPES.LAMP:
+    case COMPONENT_TYPES.INDICATOR:
+    case COMPONENT_TYPES.MOTOR:
+    case COMPONENT_TYPES.CAPACITOR:
+    case COMPONENT_TYPES.INDUCTOR:
+      return ["input", "output"];
+
+    default:
+      return ["input", "output"];
+  }
+}
 
 /* ==================================================
    CONSTRUIR GRAFO ELÉTRICO
 ================================================== */
 
-export function buildCircuitGraph(
-  circuit
-) {
-  const graph =
-    new Map();
+export function buildCircuitGraph(circuit) {
+  const graph = new Map();
 
-  const addNode = (
-    node
-  ) => {
-    if (!node) {
+  const components = Array.isArray(circuit?.components)
+    ? circuit.components
+    : [];
+
+  /*
+   * 1. Criar os nós dos terminais.
+   */
+
+  components.forEach((component) => {
+    if (!component?.id) {
       return;
     }
 
-    if (!graph.has(node)) {
-      graph.set(
-        node,
-        new Set()
-      );
-    }
-  };
+    const terminals = getComponentTerminalIds(component);
 
-
-  const components =
-    Array.isArray(
-      circuit?.components
-    )
-      ? circuit.components
-      : [];
-
-
-  /* ==========================================
-     ADICIONAR COMPONENTES
-  ========================================== */
-
-  components.forEach(
-    (component) => {
-
-      if (!component?.id) {
-        return;
-      }
-
-      let terminals = [];
-
-
-      switch (component.type) {
-
-        case COMPONENT_TYPES.SOURCE:
-
-          terminals = [
-            "positive",
-            "negative",
-          ];
-
-          break;
-
-
-        case COMPONENT_TYPES.LED:
-
-          terminals = [
-            "anode",
-            "cathode",
-          ];
-
-          break;
-
-
-        case COMPONENT_TYPES.RESISTOR:
-        case COMPONENT_TYPES.SWITCH:
-        case COMPONENT_TYPES.LAMP:
-        case COMPONENT_TYPES.MOTOR:
-
-          terminals = [
-            "input",
-            "output",
-          ];
-
-          break;
-
-
-        default:
-
-          terminals = [
-            "input",
-            "output",
-          ];
-
-          break;
-      }
-
-
-      terminals.forEach(
-        (terminalId) => {
-
-          addNode(
-            createNodeKey(
-              component.id,
-              terminalId
-            )
-          );
-
-        }
+    terminals.forEach((terminalId) => {
+      const node = createNodeKey(
+        component.id,
+        terminalId
       );
 
+      ensureGraphNode(graph, node);
+    });
+  });
 
-      addComponentInternalConnections(
-        graph,
-        component
-      );
+  /*
+   * 2. Adicionar as conexões internas.
+   */
 
-    }
-  );
-
-
-  /* ==========================================
-     ADICIONAR FIOS
-  ========================================== */
-
-  const wires =
-    getConnections(
-      circuit
+  components.forEach((component) => {
+    addComponentInternalConnections(
+      graph,
+      component
     );
+  });
 
+  /*
+   * 3. Adicionar os fios elétricos.
+   */
 
-  wires.forEach(
-    (wire) => {
+  const wires = getConnections(circuit);
 
-      if (!wire) {
-        return;
-      }
-
-
-      /*
-       * Somente conexões elétricas.
-       */
-
-      if (
-        wire.type &&
-        wire.type !== "electrical"
-      ) {
-        return;
-      }
-
-
-      /*
-       * Somente conexões ativas.
-       */
-
-      if (
-        wire.status &&
-        wire.status !== "active"
-      ) {
-        return;
-      }
-
-
-      const from =
-        getWireNodeKey(
-          wire.from
-        );
-
-
-      const to =
-        getWireNodeKey(
-          wire.to
-        );
-
-
-      if (
-        !from ||
-        !to
-      ) {
-        return;
-      }
-
-
-      addNode(from);
-      addNode(to);
-
-
-      graph
-        .get(from)
-        .add(to);
-
-      graph
-        .get(to)
-        .add(from);
-
+  wires.forEach((wire) => {
+    if (!wire) {
+      return;
     }
-  );
 
+    if (
+      wire.type &&
+      wire.type !== "electrical"
+    ) {
+      return;
+    }
+
+    if (
+      wire.status &&
+      wire.status !== "active"
+    ) {
+      return;
+    }
+
+    const from = getWireNodeKey(wire.from);
+    const to = getWireNodeKey(wire.to);
+
+    if (!from || !to) {
+      return;
+    }
+
+    addGraphConnection(
+      graph,
+      from,
+      to
+    );
+  });
 
   return graph;
 }
 
-
 /* ==================================================
-   BUSCAR CAMINHO
+   BUSCAR CAMINHO NO GRAFO
 ================================================== */
 
-export function hasPath(
-  graph,
-  start,
-  target
-) {
+export function hasPath(graph, start, target) {
   if (
     !graph ||
     !start ||
@@ -752,13 +650,9 @@ export function hasPath(
     return false;
   }
 
-
-  if (
-    start === target
-  ) {
+  if (start === target) {
     return true;
   }
-
 
   if (
     !graph.has(start) ||
@@ -767,69 +661,30 @@ export function hasPath(
     return false;
   }
 
+  const visited = new Set([start]);
+  const queue = [start];
 
-  const visited =
-    new Set();
+  let index = 0;
 
-  const queue = [
-    start,
-  ];
+  while (index < queue.length) {
+    const current = queue[index++];
 
+    const neighbors = graph.get(current) || new Set();
 
-  visited.add(
-    start
-  );
-
-
-  while (
-    queue.length > 0
-  ) {
-
-    const current =
-      queue.shift();
-
-
-    const neighbors =
-      graph.get(current) ||
-      new Set();
-
-
-    for (
-      const neighbor
-      of neighbors
-    ) {
-
-      if (
-        neighbor === target
-      ) {
+    for (const neighbor of neighbors) {
+      if (neighbor === target) {
         return true;
       }
 
-
-      if (
-        !visited.has(
-          neighbor
-        )
-      ) {
-
-        visited.add(
-          neighbor
-        );
-
-        queue.push(
-          neighbor
-        );
-
+      if (!visited.has(neighbor)) {
+        visited.add(neighbor);
+        queue.push(neighbor);
       }
-
     }
-
   }
-
 
   return false;
 }
-
 
 /* ==================================================
    CONEXÃO ENTRE TERMINAIS
@@ -840,20 +695,10 @@ export function areTerminalsConnected(
   first,
   second
 ) {
-  const graph =
-    buildCircuitGraph(
-      circuit
-    );
+  const graph = buildCircuitGraph(circuit);
 
-  const firstKey =
-    getWireNodeKey(
-      first
-    );
-
-  const secondKey =
-    getWireNodeKey(
-      second
-    );
+  const firstKey = getWireNodeKey(first);
+  const secondKey = getWireNodeKey(second);
 
   return hasPath(
     graph,
@@ -861,7 +706,6 @@ export function areTerminalsConnected(
     secondKey
   );
 }
-
 
 /* ==================================================
    TERMINAL CONECTADO
@@ -872,147 +716,81 @@ export function isTerminalConnected(
   componentId,
   terminalId
 ) {
-  const key =
-    createNodeKey(
-      componentId,
-      terminalId
-    );
+  const key = createNodeKey(
+    componentId,
+    terminalId
+  );
 
   if (!key) {
     return false;
   }
 
-  const graph =
-    buildCircuitGraph(
-      circuit
-    );
-
-  const neighbors =
-    graph.get(key);
+  const graph = buildCircuitGraph(circuit);
+  const neighbors = graph.get(key);
 
   return Boolean(
-    neighbors &&
-    neighbors.size > 0
+    neighbors && neighbors.size > 0
   );
 }
-
 
 /* ==================================================
    CIRCUITO COMPLETO
 ================================================== */
 
-export function isCircuitComplete(
-  circuit
-) {
-  const source =
-    getSource(
-      circuit
-    );
+export function isCircuitComplete(circuit) {
+  const source = getSource(circuit);
+  const loads = getLoads(circuit);
 
-  const switchComponent =
-    getSwitch(
-      circuit
-    );
-
-  const loads =
-    getLoads(
-      circuit
-    );
-
-  return Boolean(
-    source &&
-    switchComponent &&
-    loads.length > 0
-  );
+  // Basta ter fonte e pelo menos uma carga.
+  // O interruptor é opcional (pode ligar carga direto na fonte).
+  return Boolean(source && loads.length > 0);
 }
-
 
 /* ==================================================
    TERMINAIS DA CARGA
 ================================================== */
 
-export function getLoadTerminals(
-  load
-) {
+export function getLoadTerminals(load) {
   if (!load?.id) {
     return null;
   }
 
-
-  if (
-    load.type ===
-    COMPONENT_TYPES.LED
-  ) {
-
+  if (load.type === COMPONENT_TYPES.LED) {
     return {
-      input:
-        createNodeKey(
-          load.id,
-          "anode"
-        ),
-
-      output:
-        createNodeKey(
-          load.id,
-          "cathode"
-        ),
+      input: createNodeKey(load.id, "anode"),
+      output: createNodeKey(load.id, "cathode"),
     };
   }
 
-
   if (
-    load.type ===
-      COMPONENT_TYPES.LAMP ||
-    load.type ===
-      COMPONENT_TYPES.MOTOR
+    load.type === COMPONENT_TYPES.LAMP ||
+    load.type === COMPONENT_TYPES.INDICATOR ||
+    load.type === COMPONENT_TYPES.MOTOR
   ) {
-
     return {
-      input:
-        createNodeKey(
-          load.id,
-          "input"
-        ),
-
-      output:
-        createNodeKey(
-          load.id,
-          "output"
-        ),
+      input: createNodeKey(load.id, "input"),
+      output: createNodeKey(load.id, "output"),
     };
   }
-
 
   return null;
 }
-
 
 /* ==================================================
    CARGA HABILITADA
 ================================================== */
 
-function isLoadEnabled(
-  load
-) {
-  return (
-    Boolean(load) &&
-    load.enabled !== false
-  );
+function isLoadEnabled(load) {
+  return Boolean(load) &&
+    load.enabled !== false;
 }
-
 
 /* ==================================================
    CARGA CONECTADA À FONTE
 ================================================== */
 
-export function isLoadConnected(
-  circuit,
-  load
-) {
-  const source =
-    getSource(
-      circuit
-    );
+export function isLoadConnected(circuit, load) {
+  const source = getSource(circuit);
 
   if (
     !source ||
@@ -1021,182 +799,141 @@ export function isLoadConnected(
     return false;
   }
 
-
-  const terminals =
-    getLoadTerminals(
-      load
-    );
+  const terminals = getLoadTerminals(load);
 
   if (!terminals) {
     return false;
   }
 
+  const graph = buildCircuitGraph(circuit);
 
-  const graph =
-    buildCircuitGraph(
-      circuit
-    );
+  const sourcePositive = createNodeKey(
+    source.id,
+    "positive"
+  );
 
-
-  const sourcePositive =
-    createNodeKey(
-      source.id,
-      "positive"
-    );
-
-  const sourceNegative =
-    createNodeKey(
-      source.id,
-      "negative"
-    );
-
+  const sourceNegative = createNodeKey(
+    source.id,
+    "negative"
+  );
 
   /*
-   * Retiramos temporariamente a
-   * conexão interna da própria carga.
-   *
-   * Isso é importante porque o grafo
-   * é bidirecional. Sem isso, o BFS
-   * poderia atravessar a carga e
-   * "enganar" a validação.
+   * Remover a conexão interna da própria carga
+   * permite testar separadamente os dois lados.
    */
 
-  if (
-    load.type ===
-    COMPONENT_TYPES.LED
-  ) {
-
+  if (load.type === COMPONENT_TYPES.LED) {
     removeComponentInternalConnection(
       graph,
       load,
       "anode",
       "cathode"
     );
-
   } else {
-
     removeComponentInternalConnection(
       graph,
       load,
       "input",
       "output"
     );
-
   }
 
+  /*
+   * Aceita as duas orientações de polaridade:
+   * (+) → input e output → (−)
+   * ou
+   * (+) → output e input → (−)
+   *
+   * Assim o aluno não precisa adivinhar
+   * qual lado do componente é "entrada".
+   */
 
-  const positiveToInput =
-    hasPath(
-      graph,
-      sourcePositive,
-      terminals.input
-    );
-
-
-  const outputToNegative =
-    hasPath(
-      graph,
-      terminals.output,
-      sourceNegative
-    );
-
-
-  return (
-    positiveToInput &&
-    outputToNegative
+  const positiveToInput = hasPath(
+    graph,
+    sourcePositive,
+    terminals.input
   );
+
+  const outputToNegative = hasPath(
+    graph,
+    terminals.output,
+    sourceNegative
+  );
+
+  const orientationA =
+    positiveToInput && outputToNegative;
+
+  if (orientationA) {
+    return true;
+  }
+
+  const positiveToOutput = hasPath(
+    graph,
+    sourcePositive,
+    terminals.output
+  );
+
+  const inputToNegative = hasPath(
+    graph,
+    terminals.input,
+    sourceNegative
+  );
+
+  return positiveToOutput && inputToNegative;
 }
 
-
 /* ==================================================
-   INTERRUPTOR NO CAMINHO
+   DISPOSITIVO DE COMANDO NO CAMINHO
 ================================================== */
 
 export function isSwitchInCircuitPath(
   circuit,
   load
 ) {
-  const source =
-    getSource(
-      circuit
-    );
-
-  const switchComponent =
-    getSwitch(
-      circuit
-    );
-
+  const source = getSource(circuit);
+  const switchComponent = getSwitch(circuit);
 
   if (
     !source ||
     !switchComponent ||
-    !load
+    !load ||
+    !isControlDeviceClosed(switchComponent)
   ) {
     return false;
   }
 
-
-  if (
-    !isSwitchClosed(
-      switchComponent
-    )
-  ) {
-    return false;
-  }
-
-
-  const terminals =
-    getLoadTerminals(
-      load
-    );
-
+  const terminals = getLoadTerminals(load);
 
   if (!terminals) {
     return false;
   }
 
+  const graph = buildCircuitGraph(circuit);
 
-  const graph =
-    buildCircuitGraph(
-      circuit
-    );
+  const sourcePositive = createNodeKey(
+    source.id,
+    "positive"
+  );
 
+  const sourceNegative = createNodeKey(
+    source.id,
+    "negative"
+  );
 
-  const sourcePositive =
-    createNodeKey(
-      source.id,
-      "positive"
-    );
+  const controlInput = createNodeKey(
+    switchComponent.id,
+    "input"
+  );
 
-  const sourceNegative =
-    createNodeKey(
-      source.id,
-      "negative"
-    );
-
-
-  const switchInput =
-    createNodeKey(
-      switchComponent.id,
-      "input"
-    );
-
-  const switchOutput =
-    createNodeKey(
-      switchComponent.id,
-      "output"
-    );
-
+  const controlOutput = createNodeKey(
+    switchComponent.id,
+    "output"
+  );
 
   /*
-   * Removemos temporariamente:
-   *
-   * 1. a ligação interna do interruptor
-   * 2. a ligação interna da carga
-   *
-   * Assim somos obrigados a provar
-   * que o caminho passa realmente
-   * pelo interruptor e pela carga.
+   * Remover as conexões internas do comando e da carga
+   * para verificar se os caminhos realmente passam
+   * pelos dois componentes.
    */
 
   removeComponentInternalConnection(
@@ -1206,507 +943,218 @@ export function isSwitchInCircuitPath(
     "output"
   );
 
-
-  if (
-    load.type ===
-    COMPONENT_TYPES.LED
-  ) {
-
+  if (load.type === COMPONENT_TYPES.LED) {
     removeComponentInternalConnection(
       graph,
       load,
       "anode",
       "cathode"
     );
-
   } else {
-
     removeComponentInternalConnection(
       graph,
       load,
       "input",
       "output"
     );
-
   }
 
-
-  /*
-   * Caminho A:
-   *
-   * Fonte +
-   *    ↓
-   * Switch input
-   *
-   * Switch output
-   *    ↓
-   * Carga input
-   *
-   * Carga output
-   *    ↓
-   * Fonte -
-   */
-
   const pathA =
-    hasPath(
-      graph,
-      sourcePositive,
-      switchInput
-    ) &&
-    hasPath(
-      graph,
-      switchOutput,
-      terminals.input
-    ) &&
-    hasPath(
-      graph,
-      terminals.output,
-      sourceNegative
-    );
-
-
-  /*
-   * Caminho B:
-   *
-   * Fonte +
-   *    ↓
-   * Switch output
-   *
-   * Switch input
-   *    ↓
-   * Carga input
-   *
-   * Carga output
-   *    ↓
-   * Fonte -
-   */
+    hasPath(graph, sourcePositive, controlInput) &&
+    hasPath(graph, controlOutput, terminals.input) &&
+    hasPath(graph, terminals.output, sourceNegative);
 
   const pathB =
-    hasPath(
-      graph,
-      sourcePositive,
-      switchOutput
-    ) &&
-    hasPath(
-      graph,
-      switchInput,
-      terminals.input
-    ) &&
-    hasPath(
-      graph,
-      terminals.output,
-      sourceNegative
-    );
+    hasPath(graph, sourcePositive, controlOutput) &&
+    hasPath(graph, controlInput, terminals.input) &&
+    hasPath(graph, terminals.output, sourceNegative);
 
-
-  return (
-    pathA ||
-    pathB
-  );
+  return pathA || pathB;
 }
 
-
 /* ==================================================
-   CARGA ENERGIZADA INDIVIDUALMENTE
+   CARGA ENERGIZADA
 ================================================== */
 
-export function isLoadEnergized(
-  circuit,
-  load
-) {
-  const source =
-    getSource(
-      circuit
-    );
-
-  const switchComponent =
-    getSwitch(
-      circuit
-    );
-
+export function isLoadEnergized(circuit, load) {
+  const source = getSource(circuit);
 
   if (
     !source ||
-    !switchComponent ||
-    !load
-  ) {
-    return false;
-  }
-
-
-  /*
-   * Fonte desligada.
-   */
-
-  if (
-    !isSourceEnabled(
-      source
-    )
-  ) {
-    return false;
-  }
-
-
-  /*
-   * Interruptor aberto.
-   */
-
-  if (
-    !isSwitchClosed(
-      switchComponent
-    )
-  ) {
-    return false;
-  }
-
-
-  /*
-   * Fonte sem tensão.
-   */
-
-  const voltage =
-    Number(
-      source.value
-    ) || 0;
-
-
-  if (
-    voltage <= 0
-  ) {
-    return false;
-  }
-
-
-  /*
-   * Carga desabilitada.
-   */
-
-  if (
+    !isSourceEnabled(source) ||
     !isLoadEnabled(load)
   ) {
     return false;
   }
 
+  const voltage = Number(source.value) || 0;
 
-  /*
-   * Primeiro verificamos se a carga
-   * possui caminho elétrico até a fonte.
-   */
-
-  const connected =
-    isLoadConnected(
-      circuit,
-      load
-    );
-
-
-  if (!connected) {
+  if (voltage <= 0) {
     return false;
   }
 
-
   /*
-   * Depois verificamos se o
-   * interruptor realmente participa
-   * desse caminho.
+   * A própria construção do grafo respeita o estado
+   * dos interruptores, botoeiras, contatores e
+   * disjuntores: um dispositivo aberto não cria
+   * conexão interna entre input e output.
+   *
+   * Assim, a verificação do caminho elétrico considera
+   * todos os dispositivos de comando presentes no circuito.
    */
 
-  const switchInPath =
-    isSwitchInCircuitPath(
-      circuit,
-      load
-    );
-
-
-  if (!switchInPath) {
-    return false;
-  }
-
-
-  return true;
+  return isLoadConnected(circuit, load);
 }
-
 
 /* ==================================================
    CIRCUITO FECHADO
 ================================================== */
 
-export function hasClosedCircuit(
-  circuit
-) {
-  const source =
-    getSource(
-      circuit
-    );
-
-  const switchComponent =
-    getSwitch(
-      circuit
-    );
-
-  const loads =
-    getLoads(
-      circuit
-    );
-
+export function hasClosedCircuit(circuit) {
+  const source = getSource(circuit);
+  const loads = getLoads(circuit);
 
   if (
     !source ||
-    !switchComponent ||
-    loads.length === 0
+    loads.length === 0 ||
+    !isSourceEnabled(source)
   ) {
     return false;
   }
 
+  const voltage = Number(source.value) || 0;
 
-  if (
-    !isSourceEnabled(
-      source
-    )
-  ) {
+  if (voltage <= 0) {
     return false;
   }
-
-
-  if (
-    !isSwitchClosed(
-      switchComponent
-    )
-  ) {
-    return false;
-  }
-
-
-  /*
-   * Basta existir pelo menos uma carga
-   * com caminho elétrico completo.
-   */
 
   return loads.some(
-    (load) =>
-      isLoadEnergized(
-        circuit,
-        load
-      )
+    (load) => isLoadEnergized(circuit, load)
   );
 }
-
 
 /* ==================================================
    CAMINHO BÁSICO
 ================================================== */
 
-export function hasBasicCircuitPath(
-  circuit
-) {
-  return hasClosedCircuit(
-    circuit
-  );
+export function hasBasicCircuitPath(circuit) {
+  return hasClosedCircuit(circuit);
 }
-
 
 /* ==================================================
    CIRCUITO ENERGIZADO
 ================================================== */
 
-export function isCircuitEnergized(
-  circuit
-) {
-  if (
-    !isCircuitComplete(
-      circuit
-    )
-  ) {
+export function isCircuitEnergized(circuit) {
+  if (!isCircuitComplete(circuit)) {
     return false;
   }
 
-
-  const source =
-    getSource(
-      circuit
-    );
-
+  const source = getSource(circuit);
 
   if (
     !source ||
-    !isSourceEnabled(
-      source
-    )
+    !isSourceEnabled(source)
   ) {
     return false;
   }
 
+  const voltage = Number(source.value) || 0;
 
-  const voltage =
-    Number(
-      source.value
-    ) || 0;
-
-
-  if (
-    voltage <= 0
-  ) {
+  if (voltage <= 0) {
     return false;
   }
 
-
-  return hasClosedCircuit(
-    circuit
-  );
+  return hasClosedCircuit(circuit);
 }
-
 
 /* ==================================================
    RESISTÊNCIA EFETIVA
 ================================================== */
 
-function getEffectiveResistance(
-  circuit
-) {
-  const resistor =
-    getResistor(
-      circuit
-    );
-
-
+function getEffectiveResistance(circuit) {
   /*
-   * Resistor principal.
+   * Primeiro, utiliza o resistor explícito,
+   * se houver um valor válido.
    */
 
+  const resistor = getResistor(circuit);
+
   if (resistor) {
-
-    const resistance =
-      Number(
-        resistor.value
-      );
-
+    const resistance = Number(resistor.value);
 
     if (
+      Number.isFinite(resistance) &&
       resistance > 0
     ) {
       return resistance;
     }
   }
 
-
   /*
-   * Procurar resistência específica
-   * nas cargas energizadas.
+   * Depois, considera as resistências informadas
+   * nas cargas que estão efetivamente energizadas.
    */
 
-  const loads =
-    getLoads(
-      circuit
+  const connectedLoads = getLoads(circuit).filter(
+    (load) => isLoadEnergized(circuit, load)
+  );
+
+  const resistances = connectedLoads
+    .map((load) => Number(load.resistance))
+    .filter(
+      (value) =>
+        Number.isFinite(value) &&
+        value > 0
     );
-
-
-  const connectedLoads =
-    loads.filter(
-      (load) =>
-        isLoadEnergized(
-          circuit,
-          load
-        )
-    );
-
-
-  const resistances =
-    connectedLoads
-      .map(
-        (load) =>
-          Number(
-            load.resistance
-          )
-      )
-      .filter(
-        (value) =>
-          value > 0
-      );
-
 
   /*
-   * Resistências em paralelo.
-   *
-   * R equivalente =
-   *
-   * 1 / (1/R1 + 1/R2...)
+   * Aproximação: cargas com resistência configurada
+   * são consideradas em paralelo.
    */
 
-  if (
-    resistances.length > 0
-  ) {
+  if (resistances.length > 0) {
+    const inverseResistance = resistances.reduce(
+      (total, resistance) =>
+        total + 1 / resistance,
+      0
+    );
 
-    const inverseResistance =
-      resistances.reduce(
-        (
-          total,
-          resistance
-        ) =>
-          total +
-          1 / resistance,
-        0
-      );
-
-
-    if (
-      inverseResistance > 0
-    ) {
-
-      return (
-        1 /
-        inverseResistance
-      );
-
+    if (inverseResistance > 0) {
+      return 1 / inverseResistance;
     }
   }
 
+  const hasMotor = connectedLoads.some(
+    (load) =>
+      load.type === COMPONENT_TYPES.MOTOR
+  );
 
-  /*
-   * Valores padrão.
-   */
+  const hasLamp = connectedLoads.some(
+    (load) =>
+      load.type === COMPONENT_TYPES.LAMP ||
+      load.type === COMPONENT_TYPES.INDICATOR
+  );
 
-  const hasMotor =
-    connectedLoads.some(
-      (load) =>
-        load.type ===
-        COMPONENT_TYPES.MOTOR
-    );
-
-
-  const hasLamp =
-    connectedLoads.some(
-      (load) =>
-        load.type ===
-        COMPONENT_TYPES.LAMP
-    );
-
-
-  const hasLed =
-    connectedLoads.some(
-      (load) =>
-        load.type ===
-        COMPONENT_TYPES.LED
-    );
-
+  const hasLed = connectedLoads.some(
+    (load) =>
+      load.type === COMPONENT_TYPES.LED
+  );
 
   if (hasMotor) {
     return 10;
   }
 
-
   if (hasLamp) {
     return 20;
   }
-
 
   if (hasLed) {
     return 100;
   }
 
-
   return 10;
 }
-
 
 /* ==================================================
    POTÊNCIA INDIVIDUAL DA CARGA
@@ -1722,119 +1170,71 @@ function getLoadPower(
     return 0;
   }
 
-
-  /*
-   * Resistência explicitamente
-   * definida.
-   */
-
-  const resistance =
-    Number(
-      load.resistance
-    );
-
+  const resistance = Number(load.resistance);
 
   if (
+    Number.isFinite(resistance) &&
     resistance > 0 &&
     voltage > 0
   ) {
-
-    const loadCurrent =
-      voltage /
-      resistance;
-
+    const loadCurrent = voltage / resistance;
 
     return roundValue(
-      voltage *
-        loadCurrent,
+      voltage * loadCurrent,
       2
     );
   }
 
-
   /*
-   * Sem resistência configurada,
-   * usamos a potência total.
+   * Sem resistência individual configurada,
+   * utiliza a potência total como aproximação.
    */
 
   if (
     totalPower > 0 &&
     totalCurrent > 0
   ) {
-
-    return roundValue(
-      totalPower,
-      2
-    );
+    return roundValue(totalPower, 2);
   }
-
 
   return 0;
 }
 
-
 /* ==================================================
-   ESTADO DAS CARGAS
+   ESTADOS DAS CARGAS
 ================================================== */
 
-export function getLoadStates(
-  circuit,
-  energized
-) {
-  const loads =
-    getLoads(
-      circuit
-    );
-
-
+export function getLoadStates(circuit, energized = null) {
+  const loads = getLoads(circuit);
   const states = {};
 
+  loads.forEach((load) => {
+    /*
+     * Cada carga é avaliada pelo caminho elétrico real.
+     * O parâmetro "energized" global é opcional: se for
+     * explicitamente false, força desligado; caso contrário
+     * usa a conectividade do grafo.
+     */
+    const connected =
+      energized === false
+        ? false
+        : isLoadEnergized(circuit, load);
 
-  loads.forEach(
-    (load) => {
+    states[load.id] = {
+      id: load.id,
+      type: load.type,
+      energized: connected,
 
-      const connected =
-        energized &&
-        isLoadEnergized(
-          circuit,
-          load
-        );
+      running:
+        connected &&
+        load.type === COMPONENT_TYPES.MOTOR,
 
-
-      states[load.id] = {
-
-        id:
-          load.id,
-
-        type:
-          load.type,
-
-        energized:
-          connected,
-
-        /*
-         * MOTOR
-         *
-         * Somente gira quando
-         * realmente recebe energia.
-         */
-
-        running:
-          connected &&
-          load.type ===
-            COMPONENT_TYPES.MOTOR,
-
-        power:
-          0,
-      };
-
-    }
-  );
-
+      power: 0,
+    };
+  });
 
   return states;
 }
-
 
 /* ==================================================
    IDS ENERGIZADOS
@@ -1844,47 +1244,34 @@ export function getEnergizedLoadIds(
   circuit,
   energized
 ) {
-  const states =
-    getLoadStates(
-      circuit,
-      energized
-    );
+  const states = getLoadStates(
+    circuit,
+    energized
+  );
 
-
-  return Object.values(
-    states
-  )
-    .filter(
-      (state) =>
-        state.energized
-    )
-    .map(
-      (state) =>
-        state.id
-    );
+  return Object.values(states)
+    .filter((state) => state.energized)
+    .map((state) => state.id);
 }
 
-
 /* ==================================================
-   SIMULAÇÃO
-================================================== */
-
-
-/* ==================================================
-   ANÁLISE REATIVA (RC / RL)
+   ANÁLISE REATIVA RC / RL
 ================================================== */
 
 /**
- * Calcula constante de tempo e nível de carga
- * para capacitor e indutor presentes no circuito.
+ * Analisa o comportamento aproximado de capacitores
+ * e indutores durante um intervalo de tempo.
  *
- * - Capacitor: valor em µF no component.value
- * - Indutor: valor em mH no component.value
- * - Usa a resistência efetiva do circuito
+ * capacitor.value: valor em microfarads (µF).
+ * inductor.value: valor em millihenries (mH).
  *
- * elapsedSeconds: tempo desde que o circuito
- * foi energizado (passado pelo caller ou 0).
+ * elapsedSeconds: tempo transcorrido em segundos.
+ *
+ * Observação:
+ * Esta função calcula o comportamento transitório,
+ * mas não altera a topologia do grafo elétrico.
  */
+
 export function getReactiveAnalysis(
   circuit,
   resistance,
@@ -1900,99 +1287,230 @@ export function getReactiveAnalysis(
     inductor: null,
   };
 
-  const R = Number(resistance) || 0;
-  const V = Math.max(Number(voltage) || 0, 0);
-  const I = Math.max(Number(current) || 0, 0);
+  const R = Math.max(
+    Number(resistance) || 0,
+    0
+  );
+
+  const V = Math.max(
+    Number(voltage) || 0,
+    0
+  );
+
+  const I = Math.max(
+    Number(current) || 0,
+    0
+  );
+
+  const elapsed = Math.max(
+    Number(elapsedSeconds) || 0,
+    0
+  );
+
+  /* ==========================================
+     CAPACITOR
+  ========================================== */
 
   if (capacitor) {
-    const uF = Number(capacitor.value) || 0;
+    const uF = Math.max(
+      Number(capacitor.value) || 0,
+      0
+    );
+
     const C = microFaradsToFarads(uF);
-    const tau = R > 0 && C ? calculateTauRC(R, C) : null;
-    const level = tau ? chargeLevel(elapsedSeconds, tau) : 0;
-    const voltageAtTime = tau
-      ? capacitorChargeVoltage(V, elapsedSeconds, tau)
+
+    const tau =
+      R > 0 && C > 0
+        ? calculateTauRC(R, C)
+        : null;
+
+    const level =
+      tau > 0
+        ? chargeLevel(elapsed, tau)
+        : 0;
+
+    const voltageAtTime =
+      tau > 0
+        ? capacitorChargeVoltage(
+            V,
+            elapsed,
+            tau
+          )
+        : 0;
+
+    const safeVoltage = Number.isFinite(
+      Number(voltageAtTime)
+    )
+      ? Number(voltageAtTime)
       : 0;
-    const energy = C
-      ? calculateCapacitorEnergy(C, voltageAtTime ?? 0)
-      : null;
+
+    const energy =
+      C > 0
+        ? calculateCapacitorEnergy(
+            C,
+            safeVoltage
+          )
+        : null;
 
     result.capacitor = {
       id: capacitor.id,
+
       valueuF: uF,
+
       capacitanceF: C,
+
       tau,
-      tauMs: tau != null ? roundValue(tau * 1000, 3) : null,
+
+      tauMs:
+        tau != null
+          ? roundValue(tau * 1000, 3)
+          : null,
+
       chargeLevel: level,
-      chargePercent: roundValue(level * 100, 1),
-      voltage: roundValue(voltageAtTime ?? 0, 3),
-      energyJ: energy != null ? roundValue(energy, 6) : null,
-      referenceResistance: R > 0 ? roundValue(R, 2) : null,
+
+      chargePercent: roundValue(
+        level * 100,
+        1
+      ),
+
+      voltage: roundValue(
+        safeVoltage,
+        3
+      ),
+
+      energyJ:
+        energy != null
+          ? roundValue(energy, 6)
+          : null,
+
+      referenceResistance:
+        R > 0
+          ? roundValue(R, 2)
+          : null,
+
       behaviorDC: "open",
-      state: elapsedSeconds > 0 ? "carregando" : "inicial",
+
+      state:
+        elapsed > 0
+          ? "carregando"
+          : "inicial",
     };
   }
 
+  /* ==========================================
+     INDUTOR
+  ========================================== */
+
   if (inductor) {
-    const mH = Number(inductor.value) || 0;
+    const mH = Math.max(
+      Number(inductor.value) || 0,
+      0
+    );
+
     const L = milliHenriesToHenries(mH);
-    const tau = R > 0 && L ? calculateTauRL(L, R) : null;
-    const level = tau ? chargeLevel(elapsedSeconds, tau) : 0;
-    const currentAtTime = tau
-      ? inductorCurrentRise(V, R, elapsedSeconds, tau)
-      : I;
-    const energy = L
-      ? calculateInductorEnergy(L, currentAtTime ?? 0)
-      : null;
+
+    const tau =
+      R > 0 && L > 0
+        ? calculateTauRL(L, R)
+        : null;
+
+    const level =
+      tau > 0
+        ? chargeLevel(elapsed, tau)
+        : 0;
+
+    let currentAtTime = I;
+
+    if (tau > 0) {
+      const calculatedCurrent = inductorCurrentRise(
+        V,
+        R,
+        elapsed,
+        tau
+      );
+
+      currentAtTime =
+        Number.isFinite(Number(calculatedCurrent))
+          ? Number(calculatedCurrent)
+          : 0;
+    }
+
+    const energy =
+      L > 0
+        ? calculateInductorEnergy(
+            L,
+            currentAtTime
+          )
+        : null;
 
     result.inductor = {
       id: inductor.id,
+
       valuemH: mH,
+
       inductanceH: L,
+
       tau,
-      tauMs: tau != null ? roundValue(tau * 1000, 3) : null,
+
+      tauMs:
+        tau != null
+          ? roundValue(tau * 1000, 3)
+          : null,
+
       chargeLevel: level,
-      chargePercent: roundValue(level * 100, 1),
-      current: roundValue(currentAtTime ?? 0, 4),
-      energyJ: energy != null ? roundValue(energy, 6) : null,
-      referenceResistance: R > 0 ? roundValue(R, 2) : null,
+
+      chargePercent: roundValue(
+        level * 100,
+        1
+      ),
+
+      current: roundValue(
+        currentAtTime,
+        4
+      ),
+
+      energyJ:
+        energy != null
+          ? roundValue(energy, 6)
+          : null,
+
+      referenceResistance:
+        R > 0
+          ? roundValue(R, 2)
+          : null,
+
       behaviorDC: "short",
-      state: elapsedSeconds > 0 ? "energizando" : "inicial",
+
+      state:
+        elapsed > 0
+          ? "energizando"
+          : "inicial",
     };
   }
 
   return result;
 }
 
+/* ==================================================
+   SIMULAR CIRCUITO
+================================================== */
 
-export function simulateCircuit(
-  circuit
-) {
-  const source =
-    getSource(
-      circuit
-    );
+export function simulateCircuit(circuit) {
+  const source = getSource(circuit);
 
-
-  const complete =
-    isCircuitComplete(
-      circuit
-    );
-
+  const complete = isCircuitComplete(circuit);
 
   /* ==========================================
-     INCOMPLETO
+     CIRCUITO INCOMPLETO
   ========================================== */
 
   if (!complete) {
-
     return {
-
       complete: false,
 
       energized: false,
 
-      status:
-        "incompleto",
+      status: "incompleto",
 
       voltage: 0,
 
@@ -2006,244 +1524,172 @@ export function simulateCircuit(
 
       energizedLoadIds: [],
 
-      reactive:
-        getReactiveAnalysis(
-          circuit,
-          0,
-          0,
-          0,
-          0
-        ),
-
+      reactive: getReactiveAnalysis(
+        circuit,
+        0,
+        0,
+        0,
+        0
+      ),
     };
   }
-
 
   /* ==========================================
      VALORES DA FONTE
   ========================================== */
 
-  const voltage =
-    Number(
-      source?.value
-    ) || 0;
+  const voltage = Number(source?.value) || 0;
 
+  /* ==========================================
+     ESTADOS DAS CARGAS (pelo caminho elétrico)
+  ========================================== */
 
-  const resistance =
-    getEffectiveResistance(
-      circuit
-    );
+  const loadStates = getLoadStates(circuit);
+  const anyLoadOn = Object.values(loadStates).some(
+    (state) => state.energized
+  );
 
+  const resistance = getEffectiveResistance(circuit);
 
   /* ==========================================
      ENERGIZAÇÃO
   ========================================== */
 
   const energized =
-    isCircuitEnergized(
-      circuit
-    );
-
+    voltage > 0 &&
+    anyLoadOn;
 
   /* ==========================================
      CIRCUITO ABERTO
   ========================================== */
 
-  if (
-    !energized ||
-    voltage <= 0 ||
-    resistance <= 0
-  ) {
-
-    const loads =
-      getLoadStates(
-        circuit,
-        false
-      );
-
-
+  if (!energized) {
     return {
-
       complete: true,
 
       energized: false,
 
-      status:
-        "aberto",
+      status: "aberto",
 
-      voltage:
-        roundValue(
-          voltage,
-          2
-        ),
+      voltage: roundValue(voltage, 2),
 
       current: 0,
 
-      resistance:
-        roundValue(
-          resistance,
-          2
-        ),
+      resistance: roundValue(
+        resistance,
+        2
+      ),
 
       power: 0,
 
-      loads,
+      loads: loadStates,
 
       energizedLoadIds: [],
 
-      reactive:
-        getReactiveAnalysis(
-          circuit,
-          resistance,
-          0,
-          voltage,
-          0
-        ),
-
+      reactive: getReactiveAnalysis(
+        circuit,
+        resistance,
+        0,
+        voltage,
+        0
+      ),
     };
   }
-
 
   /* ==========================================
      CORRENTE TOTAL
   ========================================== */
 
-  const current =
-    calculateCurrent(
-      voltage,
-      resistance
-    ) ?? 0;
+  const calculatedCurrent = calculateCurrent(
+    voltage,
+    resistance
+  );
 
+  const current =
+    Number.isFinite(Number(calculatedCurrent))
+      ? Number(calculatedCurrent)
+      : 0;
 
   /* ==========================================
      POTÊNCIA TOTAL
   ========================================== */
 
+  const calculatedPower = calculatePower({
+    voltage,
+    current,
+    resistance,
+  });
+
   const power =
-    calculatePower({
-      voltage,
-      current,
-      resistance,
-    }) ?? 0;
-
-
-  /* ==========================================
-     ESTADOS DAS CARGAS
-  ========================================== */
-
-  const loads =
-    getLoadStates(
-      circuit,
-      true
-    );
-
+    Number.isFinite(Number(calculatedPower))
+      ? Number(calculatedPower)
+      : 0;
 
   /* ==========================================
      POTÊNCIA DAS CARGAS
   ========================================== */
 
-  Object.values(
-    loads
-  ).forEach(
-    (loadState) => {
+  Object.values(loadStates).forEach((loadState) => {
+    if (!loadState.energized) {
+      loadState.power = 0;
+      loadState.running = false;
 
-      if (
-        !loadState.energized
-      ) {
-
-        loadState.power = 0;
-
-        return;
-      }
-
-
-      const component =
-        circuit.components?.find(
-          (item) =>
-            item.id ===
-            loadState.id
-        );
-
-
-      loadState.power =
-        getLoadPower(
-          component,
-          power,
-          current,
-          voltage
-        );
-
+      return;
     }
-  );
 
+    const component = circuit.components?.find(
+      (item) => item.id === loadState.id
+    );
+
+    loadState.power = getLoadPower(
+      component,
+      power,
+      current,
+      voltage
+    );
+
+    loadState.running =
+      component?.type === COMPONENT_TYPES.MOTOR &&
+      loadState.energized;
+  });
 
   /* ==========================================
      IDS ENERGIZADOS
   ========================================== */
 
-  const energizedLoadIds =
-    Object.values(
-      loads
-    )
-      .filter(
-        (loadState) =>
-          loadState.energized
-      )
-      .map(
-        (loadState) =>
-          loadState.id
-      );
-
+  const energizedLoadIds = Object.values(loadStates)
+    .filter((loadState) => loadState.energized)
+    .map((loadState) => loadState.id);
 
   /* ==========================================
-     RESULTADO
+     RESULTADO FINAL
   ========================================== */
 
   return {
-
     complete: true,
 
     energized: true,
 
-    status:
-      "ligado",
+    status: "ligado",
 
-    voltage:
-      roundValue(
-        voltage,
-        2
-      ),
+    voltage: roundValue(voltage, 2),
 
-    current:
-      roundValue(
-        current,
-        2
-      ),
+    current: roundValue(current, 2),
 
-    resistance:
-      roundValue(
-        resistance,
-        2
-      ),
+    resistance: roundValue(resistance, 2),
 
-    power:
-      roundValue(
-        power,
-        2
-      ),
+    power: roundValue(power, 2),
 
-    loads,
+    loads: loadStates,
 
     energizedLoadIds,
-    reactive:
-      getReactiveAnalysis(
-        circuit,
-        resistance,
-        0,
-        voltage,
-        current
-      ),
 
-
+    reactive: getReactiveAnalysis(
+      circuit,
+      resistance,
+      0,
+      voltage,
+      current
+    ),
   };
 }

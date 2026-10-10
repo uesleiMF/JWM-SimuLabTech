@@ -4,11 +4,14 @@ import {
   CircleDot,
   Cog,
   Lightbulb,
+  ToggleLeft,
+  ToggleRight,
+  Box,
+  Shield,
 } from "lucide-react";
 
 import { COMPONENT_TYPES } from "./components/componentTypes";
 import { getComponentTerminals } from "./connections/connectionUtils";
-
 
 /* ==================================================
    ÍCONES DOS COMPONENTES
@@ -23,8 +26,12 @@ const icons = {
   [COMPONENT_TYPES.LAMP]: Lightbulb,
   [COMPONENT_TYPES.MOTOR]: Cog,
   [COMPONENT_TYPES.LED]: Lightbulb,
+  [COMPONENT_TYPES.PUSH_BUTTON_NO]: ToggleLeft,
+  [COMPONENT_TYPES.PUSH_BUTTON_NC]: ToggleRight,
+  [COMPONENT_TYPES.CONTACTOR]: Box,
+  [COMPONENT_TYPES.BREAKER]: Shield,
+  [COMPONENT_TYPES.INDICATOR]: Circle,
 };
-
 
 /* ==================================================
    COMPONENT NODE
@@ -32,69 +39,62 @@ const icons = {
 
 export default function ComponentNode({
   component,
-
   selected = false,
-
   energized = false,
-
   running = false,
-
   power = 0,
-
+  connectionStart = null,
   onSelect,
   onStartDrag,
-
   onStartConnection,
   onCompleteConnection,
 }) {
+  /* ==================================================
+     PROTEÇÃO
+  ================================================== */
+
+  if (!component) {
+    return null;
+  }
 
   /* ==================================================
      ÍCONE
   ================================================== */
 
-  const Icon =
-    icons[component.type] ||
-    Circle;
-
+  const Icon = icons[component.type] || Circle;
 
   /* ==================================================
-     TIPOS
+     TIPOS DE COMPONENTES
   ================================================== */
 
   const isLamp =
-    component.type ===
-    COMPONENT_TYPES.LAMP;
+    component.type === COMPONENT_TYPES.LAMP ||
+    component.type === COMPONENT_TYPES.INDICATOR;
 
   const isMotor =
-    component.type ===
-    COMPONENT_TYPES.MOTOR;
+    component.type === COMPONENT_TYPES.MOTOR;
 
   const isLED =
-    component.type ===
-    COMPONENT_TYPES.LED;
+    component.type === COMPONENT_TYPES.LED;
 
   const isSwitch =
-    component.type ===
-    COMPONENT_TYPES.SWITCH;
-
+    component.type === COMPONENT_TYPES.SWITCH ||
+    component.type === COMPONENT_TYPES.PUSH_BUTTON_NO ||
+    component.type === COMPONENT_TYPES.PUSH_BUTTON_NC ||
+    component.type === COMPONENT_TYPES.CONTACTOR ||
+    component.type === COMPONENT_TYPES.BREAKER;
 
   /* ==================================================
      TERMINAIS
   ================================================== */
 
-  const terminals =
-    getComponentTerminals(
-      component
-    ) || [];
-
+  const terminals = getComponentTerminals(component) || [];
 
   /* ==================================================
      POTÊNCIA
   ================================================== */
 
-  const numericPower =
-    Number(power) || 0;
-
+  const numericPower = Number(power) || 0;
 
   /* ==================================================
      INTENSIDADE DA LÂMPADA
@@ -102,483 +102,343 @@ export default function ComponentNode({
 
   const lampIntensity =
     isLamp && energized
-      ? Math.min(
-          Math.max(
-            numericPower / 100,
-            0.25
-          ),
-          1
-        )
+      ? Math.min(Math.max(numericPower / 100, 0.25), 1)
       : 0;
-
 
   /* ==================================================
      ESTADO DO MOTOR
   ================================================== */
 
-  /*
-   * energized:
-   *   O motor está recebendo energia.
-   *
-   * running:
-   *   O motor está efetivamente funcionando.
-   *
-   * Mantemos os dois estados separados para
-   * permitir uma simulação mais realista futuramente.
-   */
-
   const motorRunning =
-    isMotor &&
-    energized &&
-    running === true;
-
+    isMotor && energized && running === true;
 
   /* ==================================================
      ESTADO DO INTERRUPTOR
   ================================================== */
 
   const switchOn =
-    isSwitch &&
-    component.value === true;
-
+    isSwitch && component.value === true;
 
   /* ==================================================
-     MOUSE DOWN
+     IDENTIFICAR O TERMINAL DE ORIGEM
   ================================================== */
 
-  const handleMouseDown = (
-    event
-  ) => {
+  const isOriginTerminal = (terminal) => {
+    if (!connectionStart) {
+      return false;
+    }
 
-    if (
-      event.button !== 0
-    ) {
+    return (
+      connectionStart.componentId === component.id &&
+      String(connectionStart.terminalId) ===
+        String(terminal.id)
+    );
+  };
+
+  /* ==================================================
+     MOUSE DOWN NO COMPONENTE
+  ================================================== */
+
+  const handleMouseDown = (event) => {
+    if (event.button !== 0) {
       return;
     }
 
+    /*
+     * Não inicia o arraste quando o usuário
+     * está clicando em um terminal.
+     */
+
+    if (event.target.closest("[data-terminal='true']")) {
+      return;
+    }
 
     event.preventDefault();
     event.stopPropagation();
 
+    onSelect?.(component.id);
 
-    onSelect?.(
-      component.id
-    );
-
-
-    onStartDrag?.(
-      event,
-      component
-    );
+    onStartDrag?.(event, component);
   };
 
-
   /* ==================================================
-     INICIAR CONEXÃO
+     INICIAR OU CONCLUIR CONEXÃO
   ================================================== */
 
-  const handleTerminalMouseDown = (
-    event,
-    terminal
-  ) => {
-
-    if (
-      event.button !== 0
-    ) {
+  const handleTerminalMouseDown = (event, terminal) => {
+    if (event.button !== 0) {
       return;
     }
-
 
     event.preventDefault();
     event.stopPropagation();
 
+    /*
+     * PRIMEIRO CLIQUE:
+     *
+     * Se não existe uma origem selecionada,
+     * inicia a conexão neste terminal.
+     */
 
-    onStartConnection?.(
-      event,
-      component,
-      terminal
-    );
-  };
+    if (!connectionStart) {
+      onStartConnection?.(event, component, terminal);
 
-
-  /* ==================================================
-     FINALIZAR CONEXÃO
-  ================================================== */
-
-  const handleTerminalMouseUp = (
-    event,
-    terminal
-  ) => {
-
-    if (
-      event.button !== 0
-    ) {
       return;
     }
 
+    /*
+     * IMPEDIR CONEXÃO DO TERMINAL COM ELE MESMO
+     */
+
+    if (isOriginTerminal(terminal)) {
+      return;
+    }
+
+    /*
+     * SEGUNDO CLIQUE:
+     *
+     * Se já existe uma origem, utiliza
+     * este terminal como destino.
+     */
+
+    onCompleteConnection?.(event, component, terminal);
+  };
+
+  /* ==================================================
+     FINALIZAR EVENTO DO TERMINAL
+  ================================================== */
+
+  const handleTerminalMouseUp = (event, terminal) => {
+    if (event.button !== 0) {
+      return;
+    }
 
     event.preventDefault();
     event.stopPropagation();
 
+    /*
+     * A conexão é iniciada e concluída pelo
+     * mouseDown dos terminais.
+     *
+     * Por isso, não devemos concluir novamente
+     * a conexão no mouseUp.
+     *
+     * Isso evita conexões duplicadas e conflitos
+     * com as atualizações assíncronas do React.
+     */
 
-    onCompleteConnection?.(
-      event,
-      component,
-      terminal
-    );
+    if (!connectionStart) {
+      return;
+    }
+
+    /*
+     * Se o usuário soltou o mouse no terminal
+     * de origem, não faz nada.
+     */
+
+    if (isOriginTerminal(terminal)) {
+      return;
+    }
+
+    /*
+     * Não chamamos onCompleteConnection aqui,
+     * pois o segundo clique já trata da conexão.
+     */
   };
-
 
   /* ==================================================
      CLIQUE NO TERMINAL
   ================================================== */
 
-  const handleTerminalClick = (
-    event
-  ) => {
-
+  const handleTerminalClick = (event) => {
     event.preventDefault();
     event.stopPropagation();
   };
 
-
   /* ==================================================
-     CLASSES
+     CLASSES CSS
   ================================================== */
 
   const componentClasses = [
-
     "component-node",
 
     `component-node-${component.type}`,
 
-    selected
-      ? "selected"
+    selected ? "selected" : "",
+
+    energized ? "energized" : "",
+
+    isLamp && energized ? "lamp-on" : "",
+
+    motorRunning ? "motor-running" : "",
+
+    isLED && energized ? "led-on" : "",
+
+    isSwitch && switchOn ? "switch-on" : "",
+
+    isSwitch && !switchOn ? "switch-off" : "",
+
+    connectionStart?.componentId === component.id
+      ? "component-connection-origin"
       : "",
-
-    energized
-      ? "energized"
-      : "",
-
-    /*
-     * LÂMPADA
-     */
-
-    isLamp &&
-    energized
-      ? "lamp-on"
-      : "",
-
-    /*
-     * MOTOR
-     *
-     * Agora somente recebe
-     * motor-running quando
-     * realmente está funcionando.
-     */
-
-    motorRunning
-      ? "motor-running"
-      : "",
-
-    /*
-     * LED
-     */
-
-    isLED &&
-    energized
-      ? "led-on"
-      : "",
-
-    /*
-     * INTERRUPTOR
-     */
-
-    isSwitch &&
-    switchOn
-      ? "switch-on"
-      : "",
-
-    isSwitch &&
-    !switchOn
-      ? "switch-off"
-      : "",
-
   ]
     .filter(Boolean)
     .join(" ");
-
 
   /* ==================================================
      RENDER
   ================================================== */
 
   return (
-
     <button
       type="button"
-
-      className={
-        componentClasses
-      }
-
-      data-component-id={
-        component.id
-      }
-
-      data-component-type={
-        component.type
-      }
-
-      data-energized={
-        energized
-          ? "true"
-          : "false"
-      }
-
-      data-running={
-        motorRunning
-          ? "true"
-          : "false"
-      }
-
-      data-power={
-        numericPower
-      }
-
+      className={componentClasses}
+      data-component-id={component.id}
+      data-component-type={component.type}
+      data-energized={energized ? "true" : "false"}
+      data-running={motorRunning ? "true" : "false"}
+      data-power={numericPower}
       data-switch-state={
-        isSwitch
-          ? switchOn
-            ? "on"
-            : "off"
-          : undefined
+        isSwitch ? (switchOn ? "on" : "off") : undefined
       }
-
+      aria-label={component.name || component.type}
       style={{
+        left: component.position?.x ?? 0,
+        top: component.position?.y ?? 0,
 
-        left:
-          component.position?.x ?? 0,
+        "--lamp-intensity": lampIntensity,
+        "--component-power": numericPower,
 
-        top:
-          component.position?.y ?? 0,
+        ...(isLamp && energized
+          ? {
+              borderColor: "#eab308",
+              background:
+                "linear-gradient(145deg, #fffbeb 0%, #fde68a 100%)",
+              boxShadow:
+                "0 0 0 3px rgba(234, 179, 8, 0.35), 0 0 28px rgba(250, 204, 21, 0.65)",
+            }
+          : {}),
 
-        "--lamp-intensity":
-          lampIntensity,
-
-        "--component-power":
-          numericPower,
-
-        ...(
-          isLamp && energized
-            ? {
-                borderColor: "#eab308",
-                background:
-                  "linear-gradient(145deg, #fffbeb 0%, #fde68a 100%)",
-                boxShadow:
-                  "0 0 0 3px rgba(234, 179, 8, 0.35), 0 0 28px rgba(250, 204, 21, 0.65)",
-              }
-            : {}
-        ),
-
-        ...(
-          motorRunning
-            ? {
-                borderColor: "#2563eb",
-                background:
-                  "linear-gradient(145deg, #eff6ff 0%, #dbeafe 100%)",
-                boxShadow:
-                  "0 0 0 2px rgba(37, 99, 235, 0.2), 0 0 18px rgba(37, 99, 235, 0.4)",
-              }
-            : {}
-        ),
-
+        ...(motorRunning
+          ? {
+              borderColor: "#2563eb",
+              background:
+                "linear-gradient(145deg, #eff6ff 0%, #dbeafe 100%)",
+              boxShadow:
+                "0 0 0 2px rgba(37, 99, 235, 0.2), 0 0 18px rgba(37, 99, 235, 0.4)",
+            }
+          : {}),
       }}
-
-      onMouseDown={
-        handleMouseDown
-      }
-
+      onMouseDown={handleMouseDown}
       onClick={(event) => {
         event.preventDefault();
         event.stopPropagation();
+
         onSelect?.(component.id);
       }}
->
+    >
+      {/* ================================================
+          TERMINAIS ELÉTRICOS
+      ================================================= */}
 
-      {/* ==================================================
-          TERMINAIS
-      ================================================== */}
+      {terminals.map((terminal) => {
+        const terminalPosition = terminal.position || "default";
 
-      {terminals.map(
-        (terminal) => {
+        const terminalType = terminal.type || "connection";
 
-          const terminalPosition =
-            terminal.position ||
-            "default";
+        const isOrigin = isOriginTerminal(terminal);
 
-
-          const terminalType =
-            terminal.type ||
-            "connection";
-
-
-          return (
-
+        return (
+          <span
+            key={terminal.id}
+            className={[
+              "component-terminal",
+              `component-terminal-${terminalPosition}`,
+              isOrigin ? "component-terminal-origin" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            data-terminal="true"
+            data-terminal-node="true"
+            data-terminal-id={terminal.id}
+            data-terminal-type={terminalType}
+            data-terminal-position={terminalPosition}
+            data-component-id={component.id}
+            data-component-type={component.type}
+            aria-label={`Terminal ${terminal.label || terminal.id}`}
+            onMouseDown={(event) =>
+              handleTerminalMouseDown(event, terminal)
+            }
+            onMouseUp={(event) =>
+              handleTerminalMouseUp(event, terminal)
+            }
+            onClick={handleTerminalClick}
+          >
             <span
-              key={
-                terminal.id
-              }
-
-              className={
-                `component-terminal component-terminal-${terminalPosition}`
-              }
-
-              data-terminal="true"
-
-              data-terminal-node="true"
-
-              data-terminal-id={
-                terminal.id
-              }
-
-              data-terminal-type={
-                terminalType
-              }
-
-              data-terminal-position={
-                terminalPosition
-              }
-
-              data-component-id={
-                component.id
-              }
-
-              data-component-type={
-                component.type
-              }
-
-              onMouseDown={(
-                event
-              ) =>
-                handleTerminalMouseDown(
-                  event,
-                  terminal
-                )
-              }
-
-              onMouseUp={(
-                event
-              ) =>
-                handleTerminalMouseUp(
-                  event,
-                  terminal
-                )
-              }
-
-              onClick={
-                handleTerminalClick
-              }
-
+              className="component-terminal-dot"
+              data-terminal-dot="true"
             >
-
-              <span
-                className="component-terminal-dot"
-
-                data-terminal-dot="true"
-              >
-
-                {
-                  terminal.label
-                }
-
-              </span>
-
+              {terminal.label}
             </span>
+          </span>
+        );
+      })}
 
-          );
+      {/* ================================================
+          INDICADOR DE ENERGIA DA LÂMPADA
+      ================================================= */}
 
-        }
-      )}
-
-
-      {/* ==================================================
-          INDICADOR DA LÂMPADA
-      ================================================== */}
-
-      {isLamp &&
-        energized && (
-
+      {isLamp && energized && (
         <span
           className="lamp-energy-indicator"
           aria-hidden="true"
         />
-
       )}
 
-
-      {/* ==================================================
+      {/* ================================================
           INDICADOR DO MOTOR
-      ================================================== */}
+      ================================================= */}
 
       {motorRunning && (
-
         <span
           className="motor-energy-indicator"
           aria-hidden="true"
         >
-
           FUNCIONANDO
-
         </span>
-
       )}
 
-
-      {/* ==================================================
+      {/* ================================================
           INDICADOR DO LED
-      ================================================== */}
+      ================================================= */}
 
-      {isLED &&
-        energized && (
-
+      {isLED && energized && (
         <span
           className="led-energy-indicator"
           aria-hidden="true"
         >
-
           ACESO
-
         </span>
-
       )}
 
-
-      {/* ==================================================
+      {/* ================================================
           ÍCONE
-      ================================================== */}
+      ================================================= */}
 
       <span
-        className={`component-node-icon ${
-          energized
-            ? "component-node-icon-energized"
-            : ""
-        } ${
-          motorRunning
-            ? "is-spinning"
-            : ""
-        } ${
-          isLamp && energized
-            ? "is-glowing"
-            : ""
-        }`}
-
+        className={[
+          "component-node-icon",
+          energized ? "component-node-icon-energized" : "",
+          motorRunning ? "is-spinning" : "",
+          isLamp && energized ? "is-glowing" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
         aria-hidden="true"
-
         style={
           motorRunning
             ? {
-                animation:
-                  "motorSpin 0.7s linear infinite",
+                animation: "motorSpin 0.7s linear infinite",
                 color: "#2563eb",
               }
             : isLamp && energized
@@ -596,68 +456,37 @@ export default function ComponentNode({
                 : undefined
         }
       >
-
-        <Icon
-          size={28}
-        />
-
+        <Icon size={18} />
       </span>
 
+      {/* ================================================
+          NOME DO COMPONENTE
+      ================================================= */}
 
-      {/* ==================================================
-          NOME
-      ================================================== */}
+      <strong>{component.name}</strong>
 
-      <strong>
-
-        {
-          component.name
-        }
-
-      </strong>
-
-
-      {/* ==================================================
-          VALOR
-      ================================================== */}
+      {/* ================================================
+          VALOR DO COMPONENTE
+      ================================================= */}
 
       {component.unit && (
-
         <small>
-
-          {
-            component.value
-          }{" "}
-
-          {
-            component.unit
-          }
-
+          {component.value} {component.unit}
         </small>
-
       )}
 
-
-      {/* ==================================================
+      {/* ================================================
           ESTADO DO INTERRUPTOR
-      ================================================== */}
+      ================================================= */}
 
       {isSwitch && (
-
         <span
           className="switch-state-indicator"
           aria-hidden="true"
         >
-
-          {switchOn
-            ? "ON"
-            : "OFF"}
-
+          {switchOn ? "ON" : "OFF"}
         </span>
-
       )}
-
     </button>
-
   );
 }

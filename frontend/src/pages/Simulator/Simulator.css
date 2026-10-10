@@ -1,0 +1,297 @@
+.simulator-page {
+  width: 100%;
+  max-width: 1160px;
+}
+
+.simulator-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 22px;
+}
+
+.simulator-eyebrow {
+  display: inline-block;
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.simulator-header h1 {
+  margin: 10px 0 8px;
+  font-size: clamp(28px, 3vw, 34px);
+  letter-spacing: -0.02em;
+  color: #0f172a;
+}
+
+.simulator-header p {
+  max-width: 540px;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.simulator-main-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 12px;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background 0.2s ease;
+  flex: 0 0 auto;
+}
+
+.simulator-main-cta:hover {
+  background: #1d4ed8;
+}
+
+/* ==================================================
+   TOOLS
+================================================== */
+
+.simulator-tools-grid {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.simulator-tool-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 16px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.03);
+  text-decoration: none;
+  color: inherit;
+  transition:
+    border-color 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.simulator-tool-card:hover {
+  border-color: #bfdbfe;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+}
+
+.simulator-tool-card.primary {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border-color: transparent;
+  color: #ffffff;
+}
+
+.simulator-tool-card.primary p {
+  color: #94a3b8;
+}
+
+.simulator-tool-card.primary .simulator-tool-icon {
+  background: rgba(37, 99, 235, 0.2);
+  color: #60a5fa;
+}
+
+.simulator-tool-card.primary .simulator-tool-arrow {
+  color: #60a5fa;
+}
+
+.simulator-tool-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #eff6ff;
+  color: #2563eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.simulator-tool-content {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.simulator-tool-content h3 {
+  margin-bottom: 4px;
+  font-size: 15px;
+}
+
+.simulator-tool-content p {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.simulator-tool-arrow {
+  color: #94a3b8;
+  flex: 0 0 auto;
+}
+
+/* ==================================================
+   PRESETS
+================================================== */
+
+.simulator-presets {
+  margin-bottom: 18px;
+}
+
+.simulator-section-heading {
+  margin-bottom: 18px;
+}
+
+.simulator-section-heading h2 {
+  margin: 10px 0 8px;
+  font-size: 22px;
+  color: #0f172a;
+}
+
+.simulator-section-heading p {
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.simulator-presets-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.simulator-preset-card {
+  padding: 18px;
+  border-radius: 16px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.03);
+}
+
+.simulator-preset-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.simulator-preset-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: #eff6ff;
+  color: #2563eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.simulator-preset-tag {
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+}
+
+.simulator-preset-card h3 {
+  margin-bottom: 8px;
+  font-size: 16px;
+  color: #0f172a;
+}
+
+.simulator-preset-card > p {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.65;
+  margin-bottom: 16px;
+}
+
+.simulator-preset-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #dbeafe;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background 0.2s ease;
+}
+
+.simulator-preset-btn:hover {
+  background: #dbeafe;
+}
+
+/* ==================================================
+   NOTE
+================================================== */
+
+.simulator-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+  color: #1d4ed8;
+}
+
+.simulator-note svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.simulator-note p {
+  font-size: 12px;
+  line-height: 1.6;
+  font-weight: 600;
+}
+
+/* ==================================================
+   RESPONSIVO
+================================================== */
+
+@media (max-width: 1024px) {
+  .simulator-tools-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .simulator-presets-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .simulator-header {
+    flex-direction: column;
+  }
+
+  .simulator-presets-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .simulator-main-cta {
+    width: 100%;
+    justify-content: center;
+  }
+}
