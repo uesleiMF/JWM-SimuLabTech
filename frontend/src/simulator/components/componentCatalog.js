@@ -10,6 +10,8 @@ import {
   Box,
   Circle,
   Shield,
+  Flame,
+  Gauge,
 } from "lucide-react";
 
 import { COMPONENT_TYPES } from "./componentTypes";
@@ -117,6 +119,26 @@ export const componentCatalog = [
     category: "comandos",
     icon: Shield,
     color: "#ea580c",
+    defaultValue: true,
+    unit: "",
+  },
+  {
+    id: COMPONENT_TYPES.FUSE_ISOLATOR,
+    name: "Seccionador FU",
+    description: "Seccionador com fusível (fase/neutro ou NH) — proteção do circuito de comando ou potência",
+    category: "comandos",
+    icon: Flame,
+    color: "#dc2626",
+    defaultValue: true,
+    unit: "",
+  },
+  {
+    id: COMPONENT_TYPES.THERMAL_RELAY,
+    name: "Relé térmico RT",
+    description: "Relé térmico de sobrecarga (proteção do motor)",
+    category: "comandos",
+    icon: Gauge,
+    color: "#b45309",
     defaultValue: true,
     unit: "",
   },

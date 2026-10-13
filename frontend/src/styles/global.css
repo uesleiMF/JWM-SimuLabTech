@@ -1,3 +1,5 @@
+@import "./variables.css";
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -17,10 +19,17 @@ body {
     "Segoe UI",
     sans-serif;
 
-  background: #f4f7fb;
-  color: #1e293b;
+  background: #0b1220;
+  color: #e2e8f0;
 
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+  background: #0b1220;
+  color: #e2e8f0;
 }
 
 button,
@@ -36,6 +45,7 @@ button {
 
 a {
   color: inherit;
+  text-decoration: none;
 }
 
 img {
@@ -44,11 +54,9 @@ img {
 }
 
 ::selection {
-  background: #2563eb;
+  background: #3b82f6;
   color: white;
 }
-
-/* Scrollbar */
 
 ::-webkit-scrollbar {
   width: 8px;
@@ -56,30 +64,14 @@ img {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #0b1220;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #334155;
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
-
-/* Tema escuro inicial */
-
-body.dark-mode {
-  background: #0f172a;
-  color: #e2e8f0;
-}
-
-body.dark-mode .header {
-  background: #111827;
-  border-color: #1e293b;
-}
-
-body.dark-mode .student-content {
-  background: #0f172a;
+  background: #64748b;
 }

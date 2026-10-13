@@ -21,6 +21,62 @@ CAMADA VISUAL DE CONEXÕES ELÉTRICAS
 ==================================================
 */
 
+const COMPONENT_SIZES = {
+  blocos: { w: 92, h: 76 },
+  esquema: { w: 72, h: 56 },
+  "3d": { w: 110, h: 96 },
+};
+
+function getLogicalTerminalPosition(
+  component,
+  terminal,
+  viewMode = "blocos"
+) {
+  if (!component || !terminal) {
+    return null;
+  }
+
+  const size =
+    COMPONENT_SIZES[viewMode] || COMPONENT_SIZES.blocos;
+  const x = component.position?.x ?? 0;
+  const y = component.position?.y ?? 0;
+  const rotationDeg = Number(component.rotation) || 0;
+  const rotation = (rotationDeg * Math.PI) / 180;
+
+  let localX = size.w / 2;
+  let localY = size.h / 2;
+
+  const side = terminal.position || "default";
+
+  if (side === "left") {
+    localX = 0;
+    localY = size.h / 2;
+  } else if (side === "right") {
+    localX = size.w;
+    localY = size.h / 2;
+  } else if (side === "top") {
+    localX = size.w / 2;
+    localY = 0;
+  } else if (side === "bottom") {
+    localX = size.w / 2;
+    localY = size.h;
+  }
+
+  const centerX = x + size.w / 2;
+  const centerY = y + size.h / 2;
+
+  const relX = localX - size.w / 2;
+  const relY = localY - size.h / 2;
+
+  const cos = Math.cos(rotation);
+  const sin = Math.sin(rotation);
+
+  return {
+    x: centerX + relX * cos - relY * sin,
+    y: centerY + relX * sin + relY * cos,
+  };
+}
+
 const ConnectionLayer = ({
   connections = [],
   components = [],
@@ -31,6 +87,8 @@ const ConnectionLayer = ({
   onSelectWire = null,
   onEmptyClick = null,
   energized = false,
+  layoutKey = "",
+  viewMode = "blocos",
 }) => {
   const svgRef = useRef(null);
 
@@ -48,8 +106,12 @@ const ConnectionLayer = ({
   const getTerminalElement = useCallback(
     (componentId, terminalId) => {
       if (
-        !componentId ||
-        !terminalId
+        componentId === undefined ||
+        componentId === null ||
+        componentId === "" ||
+        terminalId === undefined ||
+        terminalId === null ||
+        terminalId === ""
       ) {
         return null;
       }
@@ -96,11 +158,45 @@ const ConnectionLayer = ({
         return null;
       }
 
-      const svgRect =
-        svg.getBoundingClientRect();
-
       const terminalRect =
         terminalElement.getBoundingClientRect();
+
+      if (
+        terminalRect.width === 0 ||
+        terminalRect.height === 0
+      ) {
+        return null;
+      }
+
+      // Centro do terminal na tela
+      const clientX =
+        terminalRect.left + terminalRect.width / 2;
+      const clientY =
+        terminalRect.top + terminalRect.height / 2;
+
+      /*
+       * Converte coordenada da tela → espaço local do SVG.
+       * Isso corrige zoom, perspective e rotateX do modo 3D.
+       */
+      const ctm = svg.getScreenCTM();
+
+      if (ctm) {
+        const point = svg.createSVGPoint();
+        point.x = clientX;
+        point.y = clientY;
+
+        const local = point.matrixTransform(
+          ctm.inverse()
+        );
+
+        return {
+          x: local.x,
+          y: local.y,
+        };
+      }
+
+      // Fallback sem CTM
+      const svgRect = svg.getBoundingClientRect();
 
       if (
         svgRect.width === 0 ||
@@ -109,16 +205,20 @@ const ConnectionLayer = ({
         return null;
       }
 
+      const scaleX =
+        (svg.viewBox?.baseVal?.width ||
+          svg.clientWidth ||
+          svgRect.width) / svgRect.width;
+      const scaleY =
+        (svg.viewBox?.baseVal?.height ||
+          svg.clientHeight ||
+          svgRect.height) / svgRect.height;
+
       return {
         x:
-          terminalRect.left -
-          svgRect.left +
-          terminalRect.width / 2,
-
+          (clientX - svgRect.left) * scaleX,
         y:
-          terminalRect.top -
-          svgRect.top +
-          terminalRect.height / 2,
+          (clientY - svgRect.top) * scaleY,
       };
     },
     [getTerminalElement]
@@ -141,18 +241,27 @@ const ConnectionLayer = ({
           ) || [];
 
         terminals.forEach((terminal) => {
-          const position =
-            getTerminalPosition(
-              component.id,
-              terminal.id
-            );
+          const key =
+            `${component.id}:${terminal.id}`;
+
+          // 1) DOM com CTM (reflete tamanho real do CSS + zoom + 3D)
+          const domPos = getTerminalPosition(
+            component.id,
+            terminal.id
+          );
+
+          // 2) Fallback lógico
+          const logical = getLogicalTerminalPosition(
+            component,
+            terminal,
+            viewMode
+          );
+
+          const position = domPos || logical;
 
           if (!position) {
             return;
           }
-
-          const key =
-            `${component.id}:${terminal.id}`;
 
           positions[key] = position;
         });
@@ -162,6 +271,7 @@ const ConnectionLayer = ({
     }, [
       components,
       getTerminalPosition,
+      viewMode,
     ]);
 
   /*
@@ -215,6 +325,8 @@ const ConnectionLayer = ({
     };
   }, [
     updateTerminalPositions,
+    layoutKey,
+    connections,
   ]);
 
   /*
@@ -270,8 +382,12 @@ const ConnectionLayer = ({
       }
 
       if (
-        connectionStart.componentId &&
-        connectionStart.terminalId
+        connectionStart.componentId !== undefined &&
+        connectionStart.componentId !== null &&
+        connectionStart.componentId !== "" &&
+        connectionStart.terminalId !== undefined &&
+        connectionStart.terminalId !== null &&
+        connectionStart.terminalId !== ""
       ) {
         return resolveConnectionPoint(
           connectionStart.componentId,

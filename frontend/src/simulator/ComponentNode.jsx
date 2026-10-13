@@ -30,12 +30,397 @@ const icons = {
   [COMPONENT_TYPES.PUSH_BUTTON_NC]: ToggleRight,
   [COMPONENT_TYPES.CONTACTOR]: Box,
   [COMPONENT_TYPES.BREAKER]: Shield,
+  [COMPONENT_TYPES.FUSE_ISOLATOR]: Shield,
+  [COMPONENT_TYPES.THERMAL_RELAY]: Cog,
   [COMPONENT_TYPES.INDICATOR]: Circle,
 };
 
 /* ==================================================
    COMPONENT NODE
 ================================================== */
+
+/* ==================================================
+   SÍMBOLOS DO DIAGRAMA ESQUEMÁTICO
+================================================== */
+
+/* Símbolos técnicos estilo CADe SIMU (imagem de referência) */
+function SchematicSymbol({ type, energized, switchOn }) {
+  const s = "#111827";
+
+  switch (type) {
+    case COMPONENT_TYPES.SOURCE:
+      // Bateria vertical: traço longo (+) e curto (−)
+      return (
+        <svg viewBox="0 0 40 48" className="schematic-svg">
+          <line x1="20" y1="2" x2="20" y2="12" stroke={s} strokeWidth="2" />
+          <line x1="10" y1="14" x2="30" y2="14" stroke={s} strokeWidth="2.5" />
+          <line x1="14" y1="20" x2="26" y2="20" stroke={s} strokeWidth="2" />
+          <line x1="10" y1="26" x2="30" y2="26" stroke={s} strokeWidth="2.5" />
+          <line x1="14" y1="32" x2="26" y2="32" stroke={s} strokeWidth="2" />
+          <line x1="20" y1="34" x2="20" y2="46" stroke={s} strokeWidth="2" />
+          <text x="32" y="16" fontSize="8" fill={s}>+</text>
+          <text x="32" y="34" fontSize="8" fill={s}>−</text>
+        </svg>
+      );
+    case COMPONENT_TYPES.RESISTOR:
+      return (
+        <svg viewBox="0 0 56 24" className="schematic-svg">
+          <path
+            d="M2 12 H10 L14 4 L20 20 L26 4 L32 20 L38 4 L44 12 H54"
+            fill="none"
+            stroke={s}
+            strokeWidth="2"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    case COMPONENT_TYPES.CAPACITOR:
+      return (
+        <svg viewBox="0 0 48 28" className="schematic-svg">
+          <line x1="2" y1="14" x2="18" y2="14" stroke={s} strokeWidth="2" />
+          <line x1="20" y1="4" x2="20" y2="24" stroke={s} strokeWidth="2.5" />
+          <line x1="28" y1="4" x2="28" y2="24" stroke={s} strokeWidth="2.5" />
+          <line x1="30" y1="14" x2="46" y2="14" stroke={s} strokeWidth="2" />
+        </svg>
+      );
+    case COMPONENT_TYPES.INDUCTOR:
+      return (
+        <svg viewBox="0 0 56 24" className="schematic-svg">
+          <path
+            d="M2 12 H8 A5 5 0 0 1 18 12 A5 5 0 0 1 28 12 A5 5 0 0 1 38 12 A5 5 0 0 1 48 12 H54"
+            fill="none"
+            stroke={s}
+            strokeWidth="2"
+          />
+        </svg>
+      );
+    case COMPONENT_TYPES.SWITCH:
+    case COMPONENT_TYPES.PUSH_BUTTON_NO:
+    case COMPONENT_TYPES.BREAKER:
+    case COMPONENT_TYPES.CONTACTOR:
+      return (
+        <svg viewBox="0 0 56 32" className="schematic-svg">
+          <line x1="2" y1="20" x2="16" y2="20" stroke={s} strokeWidth="2" />
+          <circle cx="18" cy="20" r="2.8" fill={s} />
+          <line
+            x1="18"
+            y1="20"
+            x2={switchOn ? "40" : "38"}
+            y2={switchOn ? "20" : "6"}
+            stroke={s}
+            strokeWidth="2.5"
+            strokeLinecap="round"
+          />
+          <circle cx="40" cy="20" r="2.8" fill={switchOn ? s : "none"} stroke={s} strokeWidth="2" />
+          <line x1="42" y1="20" x2="54" y2="20" stroke={s} strokeWidth="2" />
+        </svg>
+      );
+    case COMPONENT_TYPES.PUSH_BUTTON_NC:
+      return (
+        <svg viewBox="0 0 56 28" className="schematic-svg">
+          <line x1="2" y1="14" x2="16" y2="14" stroke={s} strokeWidth="2" />
+          <circle cx="18" cy="14" r="2.8" fill={s} />
+          <line
+            x1="18"
+            y1="14"
+            x2="40"
+            y2={switchOn ? "14" : "4"}
+            stroke={s}
+            strokeWidth="2.5"
+          />
+          <circle cx="40" cy="14" r="2.8" fill={s} />
+          <line x1="42" y1="14" x2="54" y2="14" stroke={s} strokeWidth="2" />
+        </svg>
+      );
+    case COMPONENT_TYPES.LAMP:
+    case COMPONENT_TYPES.INDICATOR:
+      // Círculo com X (como na referência)
+      return (
+        <svg viewBox="0 0 40 40" className="schematic-svg">
+          <circle
+            cx="20"
+            cy="20"
+            r="12"
+            fill={energized ? "#fef08a" : "none"}
+            stroke={s}
+            strokeWidth="2"
+          />
+          <line x1="12" y1="12" x2="28" y2="28" stroke={s} strokeWidth="1.8" />
+          <line x1="28" y1="12" x2="12" y2="28" stroke={s} strokeWidth="1.8" />
+        </svg>
+      );
+    case COMPONENT_TYPES.MOTOR:
+      // Motor trifásico estilo CADe SIMU (círculo + M + 3~)
+      return (
+        <svg viewBox="0 0 48 48" className="schematic-svg">
+          <circle cx="24" cy="24" r="14" fill="none" stroke={s} strokeWidth="2" />
+          <text
+            x="24"
+            y="22"
+            textAnchor="middle"
+            fontSize="12"
+            fontWeight="700"
+            fontFamily="Arial, sans-serif"
+            fill={s}
+          >
+            M
+          </text>
+          <text
+            x="24"
+            y="34"
+            textAnchor="middle"
+            fontSize="9"
+            fontWeight="600"
+            fontFamily="Arial, sans-serif"
+            fill={s}
+          >
+            3~
+          </text>
+        </svg>
+      );
+    case COMPONENT_TYPES.FUSE_ISOLATOR:
+      // Seccionador com fusível (FU) — retângulo + fusível
+      return (
+        <svg viewBox="0 0 56 40" className="schematic-svg">
+          <line x1="2" y1="20" x2="12" y2="20" stroke={s} strokeWidth="2" />
+          <rect
+            x="12"
+            y="8"
+            width="32"
+            height="24"
+            rx="2"
+            fill="none"
+            stroke={s}
+            strokeWidth="2"
+          />
+          {/* fusível */}
+          <rect
+            x="20"
+            y="14"
+            width="16"
+            height="12"
+            rx="1"
+            fill={switchOn ? "#fecaca" : "none"}
+            stroke={s}
+            strokeWidth="1.6"
+          />
+          <line x1="28" y1="14" x2="28" y2="26" stroke={s} strokeWidth="1.4" />
+          <text x="28" y="7" textAnchor="middle" fontSize="7" fill={s} fontWeight="700">
+            FU
+          </text>
+          <line x1="44" y1="20" x2="54" y2="20" stroke={s} strokeWidth="2" />
+        </svg>
+      );
+    case COMPONENT_TYPES.THERMAL_RELAY:
+      // Relé térmico RT
+      return (
+        <svg viewBox="0 0 56 40" className="schematic-svg">
+          <line x1="2" y1="20" x2="12" y2="20" stroke={s} strokeWidth="2" />
+          <rect
+            x="12"
+            y="10"
+            width="32"
+            height="20"
+            rx="2"
+            fill="none"
+            stroke={s}
+            strokeWidth="2"
+          />
+          <path
+            d="M18 24 Q22 12 28 20 Q34 28 38 16"
+            fill="none"
+            stroke={s}
+            strokeWidth="1.8"
+          />
+          <text x="28" y="9" textAnchor="middle" fontSize="7" fill={s} fontWeight="700">
+            RT
+          </text>
+          <line x1="44" y1="20" x2="54" y2="20" stroke={s} strokeWidth="2" />
+        </svg>
+      );
+    case COMPONENT_TYPES.LED:
+      return (
+        <svg viewBox="0 0 48 32" className="schematic-svg">
+          <line x1="2" y1="16" x2="14" y2="16" stroke={s} strokeWidth="2" />
+          <path
+            d="M16 6 L16 26 L30 16 Z"
+            fill={energized ? "#fecaca" : "none"}
+            stroke={s}
+            strokeWidth="2"
+          />
+          <line x1="30" y1="6" x2="30" y2="26" stroke={s} strokeWidth="2" />
+          <line x1="32" y1="16" x2="46" y2="16" stroke={s} strokeWidth="2" />
+          <path d="M34 8 L40 4 M34 8 L36 12" fill="none" stroke={s} strokeWidth="1.5" />
+          <path d="M38 12 L44 8 M38 12 L40 16" fill="none" stroke={s} strokeWidth="1.5" />
+        </svg>
+      );
+    default:
+      return (
+        <svg viewBox="0 0 40 24" className="schematic-svg">
+          <rect x="8" y="4" width="24" height="16" rx="2" fill="none" stroke={s} strokeWidth="2" />
+        </svg>
+      );
+  }
+}
+
+/* Ícones 3D realistas (estilo do mockup) */
+function Block3DIcon({ type, energized, switchOn, running }) {
+  switch (type) {
+    case COMPONENT_TYPES.SOURCE:
+      return (
+        <svg viewBox="0 0 48 48" className="block3d-svg">
+          <rect x="12" y="10" width="24" height="28" rx="4" fill="#1e293b" />
+          <rect x="16" y="14" width="16" height="8" rx="1" fill="#22c55e" />
+          <text x="24" y="20" textAnchor="middle" fontSize="7" fontWeight="800" fill="#fff">+</text>
+          <rect x="16" y="26" width="16" height="8" rx="1" fill="#64748b" />
+          <text x="24" y="32" textAnchor="middle" fontSize="7" fontWeight="800" fill="#fff">−</text>
+        </svg>
+      );
+    case COMPONENT_TYPES.SWITCH:
+    case COMPONENT_TYPES.PUSH_BUTTON_NO:
+    case COMPONENT_TYPES.PUSH_BUTTON_NC:
+    case COMPONENT_TYPES.BREAKER:
+    case COMPONENT_TYPES.CONTACTOR:
+      return (
+        <svg viewBox="0 0 48 48" className="block3d-svg">
+          <rect x="14" y="18" width="20" height="16" rx="3" fill="#1e293b" />
+          <rect x="18" y="22" width="12" height="8" rx="2" fill="#334155" />
+          <line
+            x1="24"
+            y1="26"
+            x2={switchOn ? "34" : "30"}
+            y2={switchOn ? "14" : "10"}
+            stroke="#cbd5e1"
+            strokeWidth="3.5"
+            strokeLinecap="round"
+          />
+          <circle cx={switchOn ? 34 : 30} cy={switchOn ? 14 : 10} r="3" fill="#e2e8f0" />
+        </svg>
+      );
+    case COMPONENT_TYPES.FUSE_ISOLATOR:
+      // Seccionador com fusível 3D
+      return (
+        <svg viewBox="0 0 48 48" className="block3d-svg">
+          <rect x="10" y="14" width="28" height="20" rx="3" fill="#1e293b" />
+          <rect
+            x="16"
+            y="18"
+            width="16"
+            height="12"
+            rx="2"
+            fill={switchOn ? "#fca5a5" : "#334155"}
+            stroke="#94a3b8"
+            strokeWidth="1"
+          />
+          <line x1="24" y1="18" x2="24" y2="30" stroke="#e2e8f0" strokeWidth="1.5" />
+          <text x="24" y="12" textAnchor="middle" fontSize="7" fontWeight="800" fill="#f87171">
+            FU
+          </text>
+        </svg>
+      );
+    case COMPONENT_TYPES.THERMAL_RELAY:
+      // Relé térmico 3D
+      return (
+        <svg viewBox="0 0 48 48" className="block3d-svg">
+          <rect x="10" y="16" width="28" height="18" rx="3" fill="#1e293b" />
+          <path
+            d="M16 28 Q20 18 24 24 Q28 30 32 20"
+            fill="none"
+            stroke={switchOn ? "#fb923c" : "#94a3b8"}
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+          <text x="24" y="14" textAnchor="middle" fontSize="7" fontWeight="800" fill="#fb923c">
+            RT
+          </text>
+        </svg>
+      );
+    case COMPONENT_TYPES.LAMP:
+    case COMPONENT_TYPES.INDICATOR:
+      return (
+        <svg viewBox="0 0 48 48" className="block3d-svg">
+          <ellipse
+            cx="24"
+            cy="20"
+            rx="12"
+            ry="14"
+            fill={energized ? "#fde047" : "#e2e8f0"}
+            stroke={energized ? "#eab308" : "#94a3b8"}
+            strokeWidth="1.5"
+          />
+          {energized && (
+            <>
+              <line x1="24" y1="2" x2="24" y2="6" stroke="#fbbf24" strokeWidth="2" />
+              <line x1="8" y1="12" x2="11" y2="14" stroke="#fbbf24" strokeWidth="2" />
+              <line x1="40" y1="12" x2="37" y2="14" stroke="#fbbf24" strokeWidth="2" />
+            </>
+          )}
+          <path d="M18 32 Q24 36 30 32 L28 38 H20 Z" fill="#64748b" />
+          <rect x="20" y="38" width="8" height="4" rx="1" fill="#475569" />
+        </svg>
+      );
+    case COMPONENT_TYPES.MOTOR:
+      return (
+        <svg viewBox="0 0 48 48" className="block3d-svg">
+          <rect
+            x="10"
+            y="16"
+            width="22"
+            height="16"
+            rx="3"
+            fill={running ? "#94a3b8" : "#64748b"}
+          />
+          <circle cx="14" cy="24" r="3" fill="#334155" />
+          <circle cx="34" cy="24" r="8" fill="#94a3b8" stroke="#475569" strokeWidth="1.5" />
+          <circle cx="34" cy="24" r="3" fill="#1e293b" />
+          {[0, 45, 90, 135].map((deg) => (
+            <line
+              key={deg}
+              x1="34"
+              y1="24"
+              x2={34 + 7 * Math.cos((deg * Math.PI) / 180)}
+              y2={24 + 7 * Math.sin((deg * Math.PI) / 180)}
+              stroke="#1e293b"
+              strokeWidth="1.5"
+            />
+          ))}
+        </svg>
+      );
+    case COMPONENT_TYPES.RESISTOR:
+      return (
+        <svg viewBox="0 0 48 32" className="block3d-svg">
+          <path
+            d="M4 16 H12 L15 6 L21 26 L27 6 L33 26 L39 6 L42 16 H44"
+            fill="none"
+            stroke="#78350f"
+            strokeWidth="3"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    case COMPONENT_TYPES.LED:
+      return (
+        <svg viewBox="0 0 48 48" className="block3d-svg">
+          <circle
+            cx="24"
+            cy="22"
+            r="12"
+            fill={energized ? "#f87171" : "#fecaca"}
+            stroke="#dc2626"
+            strokeWidth="1.5"
+          />
+          <path d="M24 10 L24 6 M16 14 L13 11 M32 14 L35 11" stroke="#fbbf24" strokeWidth="2" />
+          <rect x="20" y="34" width="8" height="6" rx="1" fill="#64748b" />
+        </svg>
+      );
+    default:
+      return (
+        <svg viewBox="0 0 48 48" className="block3d-svg">
+          <rect x="10" y="10" width="28" height="28" rx="6" fill="#94a3b8" />
+        </svg>
+      );
+  }
+}
 
 export default function ComponentNode({
   component,
@@ -44,6 +429,7 @@ export default function ComponentNode({
   running = false,
   power = 0,
   connectionStart = null,
+  viewMode = "blocos",
   onSelect,
   onStartDrag,
   onStartConnection,
@@ -62,6 +448,8 @@ export default function ComponentNode({
   ================================================== */
 
   const Icon = icons[component.type] || Circle;
+  const isSchematic = viewMode === "esquema";
+  const is3d = viewMode === "3d";
 
   /* ==================================================
      TIPOS DE COMPONENTES
@@ -82,7 +470,9 @@ export default function ComponentNode({
     component.type === COMPONENT_TYPES.PUSH_BUTTON_NO ||
     component.type === COMPONENT_TYPES.PUSH_BUTTON_NC ||
     component.type === COMPONENT_TYPES.CONTACTOR ||
-    component.type === COMPONENT_TYPES.BREAKER;
+    component.type === COMPONENT_TYPES.BREAKER ||
+    component.type === COMPONENT_TYPES.FUSE_ISOLATOR ||
+    component.type === COMPONENT_TYPES.THERMAL_RELAY;
 
   /* ==================================================
      TERMINAIS
@@ -278,6 +668,10 @@ export default function ComponentNode({
 
     isSwitch && !switchOn ? "switch-off" : "",
 
+    isSchematic ? "view-schematic" : "",
+
+    is3d ? "view-3d" : "",
+
     connectionStart?.componentId === component.id
       ? "component-connection-origin"
       : "",
@@ -305,6 +699,9 @@ export default function ComponentNode({
       style={{
         left: component.position?.x ?? 0,
         top: component.position?.y ?? 0,
+        "--component-rotation": `${component.rotation || 0}deg`,
+        transform: `rotate(var(--component-rotation, 0deg))`,
+        transformOrigin: "center center",
 
         "--lamp-intensity": lampIntensity,
         "--component-power": numericPower,
@@ -422,7 +819,7 @@ export default function ComponentNode({
       )}
 
       {/* ================================================
-          ÍCONE
+          ÍCONE / SÍMBOLO ESQUEMÁTICO
       ================================================= */}
 
       <span
@@ -431,47 +828,76 @@ export default function ComponentNode({
           energized ? "component-node-icon-energized" : "",
           motorRunning ? "is-spinning" : "",
           isLamp && energized ? "is-glowing" : "",
+          isSchematic ? "schematic-icon" : "",
         ]
           .filter(Boolean)
           .join(" ")}
         aria-hidden="true"
         style={
-          motorRunning
-            ? {
-                animation: "motorSpin 0.7s linear infinite",
-                color: "#2563eb",
-              }
-            : isLamp && energized
+          isSchematic
+            ? undefined
+            : motorRunning
               ? {
-                  color: "#ca8a04",
-                  filter:
-                    "drop-shadow(0 0 10px rgba(250, 204, 21, 0.95))",
+                  animation: "motorSpin 0.7s linear infinite",
+                  color: "#2563eb",
                 }
-              : isLED && energized
+              : isLamp && energized
                 ? {
-                    color: "#ef4444",
+                    color: "#ca8a04",
                     filter:
-                      "drop-shadow(0 0 8px rgba(239, 68, 68, 0.9))",
+                      "drop-shadow(0 0 10px rgba(250, 204, 21, 0.95))",
                   }
-                : undefined
+                : isLED && energized
+                  ? {
+                      color: "#ef4444",
+                      filter:
+                        "drop-shadow(0 0 8px rgba(239, 68, 68, 0.9))",
+                    }
+                  : undefined
         }
       >
-        <Icon size={18} />
+        {isSchematic ? (
+          <SchematicSymbol
+            type={component.type}
+            energized={energized}
+            switchOn={switchOn}
+          />
+        ) : is3d ? (
+          <Block3DIcon
+            type={component.type}
+            energized={energized}
+            switchOn={switchOn}
+            running={motorRunning}
+          />
+        ) : (
+          <Icon size={18} />
+        )}
       </span>
 
       {/* ================================================
           NOME DO COMPONENTE
       ================================================= */}
 
-      <strong>{component.name}</strong>
+      {!isSchematic && <strong>{component.name}</strong>}
+
+      {isSchematic && (
+        <strong className="schematic-label">{component.name}</strong>
+      )}
 
       {/* ================================================
           VALOR DO COMPONENTE
       ================================================= */}
 
-      {component.unit && (
+      {!isSchematic && component.unit && (
         <small>
           {component.value} {component.unit}
+        </small>
+      )}
+
+      {isSchematic && component.unit && (
+        <small className="schematic-value">
+          {component.value}
+          {component.unit}
         </small>
       )}
 

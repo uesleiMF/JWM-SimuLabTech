@@ -1,3 +1,4 @@
+/* JWM_SAVE_OPEN_V10 - ferramentas desenho CADe SIMU (selecionar/fio/apagar/mão) */
 import {
   useEffect,
   useMemo,
@@ -15,6 +16,9 @@ import {
   Lightbulb,
   Minus,
   MousePointer2,
+  Cable,
+  Eraser,
+  Hand,
   Power,
   RotateCcw,
   Settings2,
@@ -27,6 +31,12 @@ import {
   ZoomOut,
   ClipboardCheck,
   X,
+  LayoutGrid,
+  PenLine,
+  Boxes,
+  FileDown,
+  RotateCw,
+  History,
 } from "lucide-react";
 
 import "./Laboratory.css";
@@ -48,6 +58,7 @@ import {
 import {
   createElectricalConnection,
   createTerminalKey,
+  getComponentTerminals,
 } from "../../simulator/connections/connectionUtils";
 
 import {
@@ -76,6 +87,8 @@ const iconMap = {
   [COMPONENT_TYPES.PUSH_BUTTON_NC]: Power,
   [COMPONENT_TYPES.CONTACTOR]: Settings2,
   [COMPONENT_TYPES.BREAKER]: CircleAlert,
+  [COMPONENT_TYPES.FUSE_ISOLATOR]: CircleAlert,
+  [COMPONENT_TYPES.THERMAL_RELAY]: Settings2,
   [COMPONENT_TYPES.INDICATOR]: Lightbulb,
 };
 
@@ -151,6 +164,14 @@ export default function Laboratory() {
   const [validationResult, setValidationResult] =
     useState(null);
 
+  /* Modo de visualização: blocos | esquema | 3d */
+  const [viewMode, setViewMode] = useState("blocos");
+
+  /* Ferramenta ativa da barra: selecionar, fio, apagar ou mão */
+  const [drawTool, setDrawTool] = useState("select");
+
+
+
 
   /* ==================================================
      REFERÊNCIA DO QUADRO
@@ -158,6 +179,49 @@ export default function Laboratory() {
 
   const boardRef =
     useRef(null);
+
+  /* Input oculto para abrir arquivo .json do computador */
+  const fileInputRef =
+    useRef(null);
+
+  /* Lista de circuitos recentes (localStorage) */
+  const [recentCircuits, setRecentCircuits] = useState(() => {
+    try {
+      const raw = localStorage.getItem("jwm_simulabtech_recent");
+      const list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [showRecent, setShowRecent] = useState(false);
+
+  /*
+   * Converte coordenada da tela → espaço local do quadro.
+   * Corrige zoom e perspectiva 3D (getBoundingClientRect
+   * devolve o tamanho visual transformado).
+   */
+  const clientToBoardLocal = (clientX, clientY) => {
+    const board = boardRef.current;
+
+    if (!board) {
+      return { x: 0, y: 0 };
+    }
+
+    const rect = board.getBoundingClientRect();
+    const width = board.offsetWidth || rect.width;
+    const height = board.offsetHeight || rect.height;
+
+    if (rect.width === 0 || rect.height === 0) {
+      return { x: 0, y: 0 };
+    }
+
+    return {
+      x: ((clientX - rect.left) * width) / rect.width,
+      y: ((clientY - rect.top) * height) / rect.height,
+    };
+  };
 
 
   /* ==================================================
@@ -576,78 +640,471 @@ export default function Laboratory() {
      SALVAR CIRCUITO (localStorage)
   ================================================== */
 
-  const handleSaveCircuit = () => {
-    try {
-      const payload = {
-        version: 1,
-        savedAt: new Date().toISOString(),
-        circuit,
-      };
-
-      localStorage.setItem(
-        "jwm_simulabtech_circuit",
-        JSON.stringify(payload)
-      );
-
-      setMessage(
-        "Circuito salvo com sucesso."
-      );
-    } catch {
-      setMessage(
-        "Não foi possível salvar o circuito."
-      );
-    }
-  };
-
-
   /* ==================================================
-     CARREGAR CIRCUITO (localStorage)
+     SALVAR / ABRIR CIRCUITO NO COMPUTADOR (.json)
   ================================================== */
 
-  const handleLoadCircuit = () => {
-    try {
-      const raw = localStorage.getItem(
-        "jwm_simulabtech_circuit"
-      );
+  const buildCircuitPayload = (nameOverride) => {
+    const resolvedName =
+      (typeof nameOverride === "string" && nameOverride.trim()) ||
+      circuit?.name ||
+      "Novo Circuito";
 
-      if (!raw) {
-        setMessage(
-          "Nenhum circuito salvo encontrado."
-        );
-        return;
-      }
-
-      const payload = JSON.parse(raw);
-
-      if (
-        !payload?.circuit?.components
-      ) {
-        setMessage(
-          "Arquivo de circuito inválido."
-        );
-        return;
-      }
-
-      const loaded = {
-        ...payload.circuit,
+    return {
+      app: "JWM-SimuLabTech",
+      type: "circuit",
+      version: 1,
+      savedAt: new Date().toISOString(),
+      circuit: {
+        id: circuit?.id || `circuito-${Date.now()}`,
+        name: resolvedName.trim(),
+        description: circuit?.description || "",
+        components: Array.isArray(circuit?.components)
+          ? JSON.parse(JSON.stringify(circuit.components))
+          : [],
+        wires: Array.isArray(circuit?.wires)
+          ? JSON.parse(JSON.stringify(circuit.wires))
+          : [],
         selectedComponent: null,
-      };
+        selectedWire: null,
+      },
+    };
+  };
 
-      setCircuit(loaded);
-      pushHistory(loaded);
-      setConnectionStart(null);
-      setMousePosition(null);
-      setConnectionWaypoints([]);
-      setSelectedWireId(null);
-      setMessage(
-        "Circuito carregado com sucesso."
-      );
+  const parseCircuitFile = (payload) => {
+    if (!payload || typeof payload !== "object") return null;
+
+    const source =
+      payload.circuit && typeof payload.circuit === "object"
+        ? payload.circuit
+        : payload;
+
+    if (
+      !Array.isArray(source.components) &&
+      !Array.isArray(source.wires)
+    ) {
+      return null;
+    }
+
+    return {
+      id: source.id || `circuito-${Date.now()}`,
+      name: source.name || "Circuito carregado",
+      description: source.description || "",
+      components: Array.isArray(source.components)
+        ? source.components
+        : [],
+      wires: Array.isArray(source.wires) ? source.wires : [],
+      selectedComponent: null,
+      selectedWire: null,
+    };
+  };
+
+  const buildCircuitPayloadFrom = (c) => ({
+    app: "JWM-SimuLabTech",
+    type: "circuit",
+    version: 1,
+    savedAt: new Date().toISOString(),
+    circuit: {
+      id: c?.id || `circuito-${Date.now()}`,
+      name: c?.name || "Novo Circuito",
+      description: c?.description || "",
+      components: Array.isArray(c?.components)
+        ? JSON.parse(JSON.stringify(c.components))
+        : [],
+      wires: Array.isArray(c?.wires)
+        ? JSON.parse(JSON.stringify(c.wires))
+        : [],
+      selectedComponent: null,
+      selectedWire: null,
+    },
+  });
+
+  const RECENT_KEY = "jwm_simulabtech_recent";
+  const RECENT_LIMIT = 10;
+
+  const readRecentList = () => {
+    try {
+      const raw = localStorage.getItem(RECENT_KEY);
+      const list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list : [];
     } catch {
-      setMessage(
-        "Erro ao carregar o circuito."
-      );
+      return [];
     }
   };
+
+  const pushRecentCircuit = (payload) => {
+    if (!payload || !payload.circuit) return;
+    const entry = {
+      id: payload.circuit.id || `circuito-${Date.now()}`,
+      name: payload.circuit.name || "Novo Circuito",
+      description: payload.circuit.description || "",
+      savedAt: payload.savedAt || new Date().toISOString(),
+      componentCount: Array.isArray(payload.circuit.components)
+        ? payload.circuit.components.length
+        : 0,
+      wireCount: Array.isArray(payload.circuit.wires)
+        ? payload.circuit.wires.length
+        : 0,
+      payload,
+    };
+
+    try {
+      const prev = readRecentList().filter(
+        (item) => item && item.id !== entry.id
+      );
+      const next = [entry, ...prev].slice(0, RECENT_LIMIT);
+      localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+      setRecentCircuits(next);
+    } catch (err) {
+      console.warn("[JWM] Falha ao gravar recentes:", err);
+    }
+  };
+
+  const handleOpenRecent = (entry) => {
+    if (!entry?.payload) {
+      setMessage("Circuito recente inválido.");
+      return;
+    }
+    const loaded = parseCircuitFile(entry.payload);
+    if (!loaded) {
+      setMessage("Não foi possível abrir este circuito recente.");
+      return;
+    }
+    applyLoadedCircuit(loaded, entry.name || "recente");
+    setShowRecent(false);
+    try {
+      localStorage.setItem(
+        "jwm_simulabtech_circuit",
+        JSON.stringify(entry.payload)
+      );
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleClearRecent = () => {
+    try {
+      localStorage.removeItem(RECENT_KEY);
+    } catch {
+      /* ignore */
+    }
+    setRecentCircuits([]);
+    setShowRecent(false);
+    setMessage("Lista de circuitos recentes limpa.");
+  };
+
+  const applyLoadedCircuit = (loaded, sourceLabel) => {
+    if (!loaded) return false;
+
+    // Garante estrutura mínima para o quadro renderizar
+    const components = (Array.isArray(loaded.components) ? loaded.components : [])
+      .filter((c) => c && c.id && c.type)
+      .map((c) => ({
+        ...c,
+        position: {
+          x: Number(c.position?.x) || 0,
+          y: Number(c.position?.y) || 0,
+        },
+        enabled: c.enabled !== false,
+      }));
+
+    const wires = (Array.isArray(loaded.wires) ? loaded.wires : [])
+      .filter((w) => w && w.from && w.to)
+      .map((w) => ({
+        ...w,
+        type: w.type || "electrical",
+        status: w.status || "active",
+        points: Array.isArray(w.points) ? w.points : [],
+      }));
+
+    const snapshot = {
+      id: loaded.id || `circuito-${Date.now()}`,
+      name: loaded.name || "Circuito carregado",
+      description: loaded.description || "",
+      components,
+      wires,
+      selectedComponent: null,
+      selectedWire: null,
+    };
+
+    console.log(
+      "[JWM] Aplicando circuito:",
+      snapshot.components.length,
+      "comp,",
+      snapshot.wires.length,
+      "fios — origem:",
+      sourceLabel
+    );
+
+    setCircuit(snapshot);
+    setHistory([JSON.parse(JSON.stringify(snapshot))]);
+    setHistoryIndex(0);
+    setConnectionStart(null);
+    setMousePosition(null);
+    setConnectionWaypoints([]);
+    setSelectedWireId(null);
+    setValidationResult(null);
+    setMessage(
+      "Aberto: " +
+        sourceLabel +
+        " — " +
+        snapshot.components.length +
+        " componente(s), " +
+        snapshot.wires.length +
+        " fio(s)."
+    );
+    return true;
+  };
+
+  const handleSaveCircuit = () => {
+    console.log("[JWM] Salvar clicado — download + localStorage");
+    try {
+      const currentName = circuit?.name || "Novo Circuito";
+      const typed = window.prompt(
+        "Nome do circuito:",
+        currentName
+      );
+
+      // Cancelou o prompt
+      if (typed === null) {
+        setMessage("Salvamento cancelado.");
+        return;
+      }
+
+      const circuitName = typed.trim() || "Novo Circuito";
+
+      // Atualiza o nome no estado para a próxima vez
+      setCircuit((current) => ({
+        ...current,
+        name: circuitName,
+      }));
+
+      const payload = buildCircuitPayload(circuitName);
+      const nComp = payload.circuit.components.length;
+      const nWire = payload.circuit.wires.length;
+      console.log(
+        "[JWM] Salvando:",
+        circuitName,
+        "—",
+        nComp,
+        "comp,",
+        nWire,
+        "fios"
+      );
+
+      if (nComp === 0 && nWire === 0) {
+        setMessage(
+          "Quadro vazio — o arquivo seria salvo sem componentes. Adicione peças antes de salvar."
+        );
+      }
+
+      const json = JSON.stringify(payload, null, 2);
+
+      try {
+        localStorage.setItem("jwm_simulabtech_circuit", json);
+      } catch {
+        /* ignore quota / private mode */
+      }
+
+      pushRecentCircuit(payload);
+
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const stamp = new Date()
+        .toISOString()
+        .slice(0, 19)
+        .replace(/[:T]/g, "-");
+      const baseName =
+        circuitName
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/\s+/g, "-")
+          .replace(/[^a-z0-9\-_]/g, "") || "circuito";
+
+      const fileName = baseName + "-" + stamp + ".json";
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      a.rel = "noopener";
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        try {
+          document.body.removeChild(a);
+        } catch {
+          /* ignore */
+        }
+        URL.revokeObjectURL(url);
+      }, 200);
+
+      console.log("[JWM] Download disparado:", fileName);
+      setMessage(
+        'Circuito "' +
+          circuitName +
+          '" salvo: ' +
+          fileName +
+          " (" +
+          nComp +
+          " comp, " +
+          nWire +
+          " fios)."
+      );
+    } catch (err) {
+      console.error("Salvar circuito:", err);
+      setMessage("Erro ao salvar o circuito.");
+    }
+  };
+
+  const loadCircuitFromText = (textContent, sourceLabel) => {
+    try {
+      const text = String(textContent || "").trim();
+      if (!text) {
+        setMessage("Arquivo vazio.");
+        return false;
+      }
+      console.log("[JWM] Conteúdo lido (início):", text.slice(0, 200));
+      const payload = JSON.parse(text);
+      const loaded = parseCircuitFile(payload);
+
+      if (!loaded) {
+        console.warn("[JWM] parseCircuitFile retornou null", payload);
+        setMessage(
+          "Arquivo inválido. Use um .json salvo pelo botão Salvar desta tela."
+        );
+        return false;
+      }
+
+      if (
+        (!loaded.components || loaded.components.length === 0) &&
+        (!loaded.wires || loaded.wires.length === 0)
+      ) {
+        setMessage(
+          "Arquivo aberto, mas está vazio (0 componentes). Salve de novo com o circuito montado."
+        );
+      }
+
+      const ok = applyLoadedCircuit(loaded, sourceLabel);
+
+      try {
+        const payload = buildCircuitPayloadFrom(loaded);
+        localStorage.setItem(
+          "jwm_simulabtech_circuit",
+          JSON.stringify(payload)
+        );
+        pushRecentCircuit(payload);
+      } catch {
+        /* ignore */
+      }
+
+      return ok;
+    } catch (err) {
+      console.error("[JWM] Erro ao abrir circuito:", err);
+      setMessage(
+        "Não foi possível ler o arquivo. Ele precisa ser um JSON válido salvo por este laboratório."
+      );
+      return false;
+    }
+  };
+
+  const handleOpenCircuit = (event) => {
+    // Shift+clique no rótulo: carrega o último do localStorage (não abre diálogo)
+    if (event && event.shiftKey) {
+      if (event.preventDefault) event.preventDefault();
+      if (event.stopPropagation) event.stopPropagation();
+      try {
+        const raw = localStorage.getItem("jwm_simulabtech_circuit");
+        if (!raw) {
+          setMessage(
+            "Nenhum circuito salvo no navegador. Use Salvar primeiro ou escolha um arquivo."
+          );
+          return;
+        }
+        console.log("[JWM] Shift+Abrir — carregando localStorage");
+        loadCircuitFromText(raw, "último salvo no navegador");
+      } catch (err) {
+        console.error("[JWM] Erro ao abrir do localStorage:", err);
+        setMessage("Não foi possível abrir o último circuito salvo no navegador.");
+      }
+      return;
+    }
+
+    // Clique normal: o <label htmlFor> abre o seletor nativo.
+    // Só limpamos o value para permitir reescolher o mesmo arquivo.
+    console.log("[JWM] Abrir clicado — seletor nativo via label");
+    const input = fileInputRef.current;
+    if (input) {
+      input.value = "";
+    }
+  };
+
+  const handleFileInputChange = (event) => {
+    console.log("[JWM] onChange do input de arquivo disparou", event?.type);
+    const list = event.target.files;
+    const file = list && list[0];
+    console.log(
+      "[JWM] Arquivo selecionado:",
+      file && file.name,
+      file && file.size,
+      file && file.type,
+      "files.length=",
+      list && list.length
+    );
+
+    if (!file) {
+      console.log("[JWM] Nenhum arquivo no input (cancelou?)");
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      loadCircuitFromText(String(reader.result || ""), file.name);
+      // permite selecionar o mesmo arquivo de novo
+      event.target.value = "";
+    };
+
+    reader.onerror = () => {
+      console.error("[JWM] FileReader error");
+      setMessage("Falha ao ler o arquivo do disco.");
+      event.target.value = "";
+    };
+
+    reader.readAsText(file, "UTF-8");
+  };
+
+  const handleDropCircuitFile = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const file =
+      event.dataTransfer &&
+      event.dataTransfer.files &&
+      event.dataTransfer.files[0];
+    if (!file) return;
+
+    console.log("[JWM] Arquivo solto no quadro:", file.name, file.size);
+    const reader = new FileReader();
+    reader.onload = () => {
+      loadCircuitFromText(String(reader.result || ""), file.name);
+    };
+    reader.onerror = () => {
+      setMessage("Falha ao ler o arquivo arrastado.");
+    };
+    reader.readAsText(file, "UTF-8");
+  };
+
+  const handleDragOverCircuitFile = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = "copy";
+    }
+  };
+
+  const handleLoadCircuit = handleOpenCircuit;
+
+
 
 
   /* ==================================================
@@ -668,6 +1125,404 @@ export default function Laboratory() {
 
   const handleZoomReset = () => {
     setZoom(1);
+  };
+
+
+  /* ==================================================
+     ROTAÇÃO DOS COMPONENTES (só os ícones)
+  ================================================== */
+
+  const selectedRotation =
+    selectedComponent?.rotation || 0;
+
+  const applyComponentRotation = (
+    componentId,
+    degrees
+  ) => {
+    let next = degrees % 360;
+    if (next < 0) next += 360;
+
+    updateCircuit((current) =>
+      updateComponent(current, componentId, {
+        rotation: next,
+      })
+    );
+  };
+
+  const handleRotationChange = (event) => {
+    if (!selectedComponent) {
+      setMessage(
+        "Selecione um componente para girar."
+      );
+      return;
+    }
+
+    const value = Number(event.target.value);
+    applyComponentRotation(
+      selectedComponent.id,
+      Number.isFinite(value) ? value : 0
+    );
+  };
+
+  const handleRotationReset = () => {
+    if (!selectedComponent) {
+      setMessage(
+        "Selecione um componente para zerar a rotação."
+      );
+      return;
+    }
+
+    applyComponentRotation(selectedComponent.id, 0);
+    setMessage(
+      `Rotação de ${selectedComponent.name} zerada.`
+    );
+  };
+
+  const handleRotateStep = (delta) => {
+    if (!selectedComponent) {
+      setMessage(
+        "Selecione um componente para girar."
+      );
+      return;
+    }
+
+    const current = selectedComponent.rotation || 0;
+    let next = (current + delta) % 360;
+    if (next < 0) next += 360;
+
+    applyComponentRotation(selectedComponent.id, next);
+    setMessage(
+      `${selectedComponent.name} girado para ${next}°.`
+    );
+  };
+
+
+  /* ==================================================
+     EXPORTAR PDF (circuito + medições + cálculos)
+  ================================================== */
+
+  const handleExportPdf = () => {
+    const title =
+      (circuit.name && String(circuit.name).trim()) ||
+      activeExercise?.title ||
+      "Circuito JWM SimuLabTech";
+
+    const printWindow = window.open("", "_blank");
+
+    if (!printWindow) {
+      setMessage("Permita pop-ups para exportar o PDF.");
+      return;
+    }
+
+    const V = Number(simulation.voltage) || 0;
+    const I = Number(simulation.current) || 0;
+    const R = Number(simulation.resistance) || 0;
+    const P = Number(simulation.power) || 0;
+
+    const iOhm = R > 0 ? V / R : null;
+    const vOhm = I * R;
+    const rOhm = I > 0 ? V / I : null;
+    const pVI = V * I;
+    const pI2R = I * I * R;
+    const pV2R = R > 0 ? (V * V) / R : null;
+    const e1s = P;
+    const e60s = P * 60;
+
+    const fmt = (n, digits = 4) =>
+      n == null || !Number.isFinite(n) ? "—" : Number(n).toFixed(digits);
+
+    const statusLabel = simulation.energized
+      ? "Circuito energizado"
+      : simulation.status === "aberto"
+        ? "Circuito aberto"
+        : "Circuito incompleto";
+
+    // ---- Diagrama SVG a partir dos dados (fios alinhados) ----
+    const sizes = {
+      blocos: { w: 92, h: 76 },
+      esquema: { w: 72, h: 56 },
+      "3d": { w: 110, h: 96 },
+    };
+    const size = sizes[viewMode] || sizes.blocos;
+
+    const terminalPoint = (component, side) => {
+      const x = component.position?.x ?? 0;
+      const y = component.position?.y ?? 0;
+      const rot = ((Number(component.rotation) || 0) * Math.PI) / 180;
+      let lx = size.w / 2;
+      let ly = size.h / 2;
+      if (side === "left") {
+        lx = 0;
+        ly = size.h / 2;
+      } else if (side === "right") {
+        lx = size.w;
+        ly = size.h / 2;
+      } else if (side === "top") {
+        lx = size.w / 2;
+        ly = 0;
+      } else if (side === "bottom") {
+        lx = size.w / 2;
+        ly = size.h;
+      }
+      const cx = x + size.w / 2;
+      const cy = y + size.h / 2;
+      const rx = lx - size.w / 2;
+      const ry = ly - size.h / 2;
+      return {
+        x: cx + rx * Math.cos(rot) - ry * Math.sin(rot),
+        y: cy + rx * Math.sin(rot) + ry * Math.cos(rot),
+      };
+    };
+
+    const terminalSide = (component, terminalId) => {
+      const terminals =
+        (typeof getComponentTerminals === "function"
+          ? getComponentTerminals(component)
+          : null) || [];
+      const found = terminals.find((t) => t.id === terminalId);
+      return found?.position || "right";
+    };
+
+    const components = circuit.components || [];
+    const wires = circuit.wires || [];
+
+    let minX = 0;
+    let minY = 0;
+    let maxX = 400;
+    let maxY = 300;
+    components.forEach((c) => {
+      const x = c.position?.x ?? 0;
+      const y = c.position?.y ?? 0;
+      minX = Math.min(minX, x - 20);
+      minY = Math.min(minY, y - 20);
+      maxX = Math.max(maxX, x + size.w + 40);
+      maxY = Math.max(maxY, y + size.h + 40);
+    });
+
+    const pad = 24;
+    const svgW = Math.max(420, maxX - minX + pad * 2);
+    const svgH = Math.max(280, maxY - minY + pad * 2);
+    const ox = -minX + pad;
+    const oy = -minY + pad;
+
+    const wirePaths = wires
+      .map((wire) => {
+        const fromComp = components.find(
+          (c) => c.id === wire.from?.componentId
+        );
+        const toComp = components.find(
+          (c) => c.id === wire.to?.componentId
+        );
+        if (!fromComp || !toComp) return "";
+
+        const start = terminalPoint(
+          fromComp,
+          terminalSide(fromComp, wire.from?.terminalId)
+        );
+        const end = terminalPoint(
+          toComp,
+          terminalSide(toComp, wire.to?.terminalId)
+        );
+
+        const points = Array.isArray(wire.points) ? wire.points : [];
+        const all = [start, ...points, end];
+        let d = `M ${all[0].x + ox} ${all[0].y + oy}`;
+        for (let i = 1; i < all.length; i++) {
+          const prev = all[i - 1];
+          const curr = all[i];
+          // ortogonal
+          d += ` L ${curr.x + ox} ${prev.y + oy} L ${curr.x + ox} ${curr.y + oy}`;
+        }
+        return `<path d="${d}" fill="none" stroke="#111827" stroke-width="2" stroke-linejoin="round" />`;
+      })
+      .join("");
+
+    const componentRects = components
+      .map((c) => {
+        const x = (c.position?.x ?? 0) + ox;
+        const y = (c.position?.y ?? 0) + oy;
+        const label = (c.name || c.type || "").replace(/</g, "");
+        const value =
+          c.value != null
+            ? `${c.value}${c.unit ? ` ${c.unit}` : ""}`
+            : "";
+        return `
+          <rect x="${x}" y="${y}" width="${size.w}" height="${size.h}" rx="8" fill="#ffffff" stroke="#334155" stroke-width="1.5" />
+          <text x="${x + size.w / 2}" y="${y + size.h / 2 - 4}" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">${label}</text>
+          <text x="${x + size.w / 2}" y="${y + size.h / 2 + 12}" text-anchor="middle" font-size="10" fill="#64748b">${value}</text>
+        `;
+      })
+      .join("");
+
+    const diagramSvg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}" style="max-width:100%;height:auto;background:#fafafa;border:1px solid #e2e8f0;border-radius:12px">
+        ${wirePaths}
+        ${componentRects}
+      </svg>
+    `;
+
+    const componentsRows = components
+      .map((c) => {
+        const loadState = simulation.loads?.[c.id];
+        const loadPower = loadState?.power;
+        const loadOn = loadState?.energized ? "Sim" : "Não";
+        return `<tr>
+          <td>${c.name || c.type}</td>
+          <td>${c.type}</td>
+          <td>${c.value ?? "—"}${c.unit ? ` ${c.unit}` : ""}</td>
+          <td>${loadOn}</td>
+          <td>${loadPower != null ? `${loadPower} W` : "—"}</td>
+        </tr>`;
+      })
+      .join("");
+
+    const calcRows = [
+      ["Lei de Ohm", "I = V / R", R > 0 ? `${V} / ${R} = ${fmt(iOhm)} A` : "R = 0"],
+      ["Lei de Ohm", "V = I × R", `${I} × ${R} = ${fmt(vOhm)} V`],
+      ["Lei de Ohm", "R = V / I", I > 0 ? `${V} / ${I} = ${fmt(rOhm)} Ω` : "I = 0"],
+      ["Potência", "P = V × I", `${V} × ${I} = ${fmt(pVI)} W`],
+      ["Potência", "P = I² × R", `${I}² × ${R} = ${fmt(pI2R)} W`],
+      ["Potência", "P = V² / R", R > 0 ? `${V}² / ${R} = ${fmt(pV2R)} W` : "R = 0"],
+      ["Energia", "E = P × t (1 s)", `${fmt(e1s)} J`],
+      ["Energia", "E = P × t (60 s)", `${fmt(e60s)} J`],
+      ["Associação", "R_eq do circuito", `${R} Ω`],
+    ];
+
+    const calcTable = calcRows
+      .map(
+        ([group, formula, result]) =>
+          `<tr><td>${group}</td><td><code>${formula}</code></td><td>${result}</td></tr>`
+      )
+      .join("");
+
+    printWindow.document.write(`<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>${title}</title>
+  <style>
+    @page { size: A4 landscape; margin: 10mm; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 16px 20px;
+      font-family: Inter, system-ui, sans-serif;
+      color: #0f172a;
+      background: #fff;
+    }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    h2 { font-size: 14px; margin: 0 0 10px; color: #1e293b; }
+    .meta { font-size: 12px; color: #64748b; margin-bottom: 14px; }
+    .layout {
+      display: grid;
+      grid-template-columns: 1.35fr 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+    .panel {
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 14px;
+      background: #fff;
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .metric {
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 10px;
+      background: #f8fafc;
+    }
+    .metric span { display: block; font-size: 11px; color: #64748b; margin-bottom: 4px; }
+    .metric strong { font-size: 18px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { border-bottom: 1px solid #e2e8f0; padding: 7px 8px; text-align: left; vertical-align: top; }
+    th { color: #64748b; font-weight: 700; }
+    code {
+      font-weight: 700;
+      color: #1d4ed8;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 4px;
+      padding: 1px 6px;
+      white-space: nowrap;
+    }
+    .status-ok { color: #15803d; font-weight: 700; }
+    .status-off { color: #b45309; font-weight: 700; }
+    @media print { body { padding: 0; } }
+  </style>
+</head>
+<body>
+  <h1>${title}</h1>
+  <div class="meta">
+    JWM SimuLabTech · ${new Date().toLocaleString("pt-BR")} ·
+    <span class="${simulation.energized ? "status-ok" : "status-off"}">${statusLabel}</span>
+  </div>
+  ${(circuit.description || "").trim()
+    ? `<p style="margin:8px 0 0;color:#475569;font-size:13px;max-width:720px">${String(circuit.description).replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>`
+    : ""}
+
+  <div class="layout">
+    <div>
+      <h2>Diagrama do circuito</h2>
+      ${diagramSvg}
+    </div>
+
+    <div class="panel">
+      <h2>Medições</h2>
+      <div class="metrics">
+        <div class="metric"><span>Tensão (V)</span><strong>${V} V</strong></div>
+        <div class="metric"><span>Corrente (I)</span><strong>${I} A</strong></div>
+        <div class="metric"><span>Resistência (R)</span><strong>${R} Ω</strong></div>
+        <div class="metric"><span>Potência (P)</span><strong>${P} W</strong></div>
+      </div>
+
+      <h2>Cálculos aplicados</h2>
+      <table>
+        <thead>
+          <tr><th>Grupo</th><th>Fórmula</th><th>Resultado</th></tr>
+        </thead>
+        <tbody>
+          ${calcTable}
+        </tbody>
+      </table>
+
+      <h2 style="margin-top:14px">Componentes</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Tipo</th>
+            <th>Valor</th>
+            <th>Energizado</th>
+            <th>Potência</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${componentsRows || "<tr><td colspan='5'>Nenhum componente</td></tr>"}
+        </tbody>
+      </table>
+      <div style="margin-top:10px;font-size:11px;color:#64748b">
+        Fios: ${wires.length} · Componentes: ${components.length}
+      </div>
+    </div>
+  </div>
+</body>
+</html>`);
+
+    printWindow.document.close();
+
+    setTimeout(() => {
+      printWindow.focus();
+      printWindow.print();
+      setMessage(
+        'PDF: use "Salvar como PDF" na janela de impressão.'
+      );
+    }, 400);
   };
 
 
@@ -710,6 +1565,27 @@ export default function Laboratory() {
         return;
       }
 
+      // R → girar componente selecionado 90°
+      if (
+        event.key.toLowerCase() === "r" &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !connectionStart
+      ) {
+        if (
+          event.target.tagName === "INPUT" ||
+          event.target.tagName === "TEXTAREA"
+        ) {
+          return;
+        }
+
+        if (selectedComponent) {
+          event.preventDefault();
+          handleRotateStep(90);
+        }
+        return;
+      }
+
       // Ctrl+Z ou Cmd+Z → desfazer
       if (
         (event.ctrlKey || event.metaKey) &&
@@ -731,7 +1607,13 @@ export default function Laboratory() {
         handleKeyDown
       );
     };
-  }, [connectionStart, selectedWireId, historyIndex, history]);
+  }, [
+    connectionStart,
+    selectedWireId,
+    selectedComponent,
+    historyIndex,
+    history,
+  ]);
 
 
   /* ==================================================
@@ -741,6 +1623,25 @@ export default function Laboratory() {
   const handleSelectComponent = (
     componentId
   ) => {
+    // Ferramenta Apagar: remove o componente ao clicar
+    if (drawTool === "delete") {
+      updateCircuit((current) => {
+        const withoutWires = {
+          ...current,
+          wires: (current.wires || []).filter(
+            (w) =>
+              w?.from?.componentId !== componentId &&
+              w?.to?.componentId !== componentId
+          ),
+        };
+        return removeComponent(withoutWires, componentId);
+      });
+      setSelectedWireId(null);
+      setConnectionStart(null);
+      setMessage("Componente removido.");
+      return;
+    }
+
     setSelectedWireId(null);
 
     setCircuit((current) =>
@@ -1071,6 +1972,15 @@ export default function Laboratory() {
       event.preventDefault();
     }
 
+    if (drawTool === "delete") {
+      return;
+    }
+
+    // Com ferramenta Selecionar, ainda permite fio pelos terminais.
+    // Com ferramenta Fio, força modo de ligação.
+    if (drawTool === "pan") {
+      return;
+    }
 
     if (
       !component ||
@@ -1120,20 +2030,12 @@ export default function Laboratory() {
       boardRef.current
     ) {
 
-      const rect =
-        boardRef.current
-          .getBoundingClientRect();
-
-
-      setMousePosition({
-        x:
-          event.clientX -
-          rect.left,
-
-        y:
-          event.clientY -
-          rect.top,
-      });
+      setMousePosition(
+        clientToBoardLocal(
+          event.clientX,
+          event.clientY
+        )
+      );
     }
 
 
@@ -1417,20 +2319,12 @@ export default function Laboratory() {
       return;
     }
 
-
-    const rect =
-      board.getBoundingClientRect();
-
-
-    setMousePosition({
-      x:
-        event.clientX -
-        rect.left,
-
-      y:
-        event.clientY -
-        rect.top,
-    });
+    setMousePosition(
+      clientToBoardLocal(
+        event.clientX,
+        event.clientY
+      )
+    );
   };
 
 
@@ -1465,6 +2359,18 @@ export default function Laboratory() {
       return;
     }
 
+    if (drawTool === "delete") {
+      updateCircuit((current) => ({
+        ...current,
+        wires: (current.wires || []).filter(
+          (wire) => wire.id !== wireId
+        ),
+      }));
+      setSelectedWireId(null);
+      setMessage("Fio removido.");
+      return;
+    }
+
     setSelectedWireId(wireId);
     setCircuit((current) => ({
       ...current,
@@ -1472,7 +2378,7 @@ export default function Laboratory() {
     }));
 
     setMessage(
-      "Fio selecionado. Pressione Delete para remover."
+      "Fio selecionado. Pressione Delete para remover (ou use a ferramenta Apagar)."
     );
   };
 
@@ -1627,12 +2533,10 @@ export default function Laboratory() {
         return;
       }
 
-      const rect = board.getBoundingClientRect();
-
-      const point = {
-        x: event.clientX - rect.left,
-        y: event.clientY - rect.top,
-      };
+      const point = clientToBoardLocal(
+        event.clientX,
+        event.clientY
+      );
 
       setConnectionWaypoints((prev) => [...prev, point]);
 
@@ -2081,6 +2985,127 @@ export default function Laboratory() {
             Laboratório de Circuitos
           </h1>
 
+          <div
+            className="laboratory-circuit-name-row"
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px",
+              marginTop: "8px",
+              marginBottom: "4px",
+              maxWidth: "520px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                flexWrap: "wrap",
+              }}
+            >
+              <label
+                htmlFor="jwm-circuit-name-input"
+                style={{
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  color: "var(--text-secondary, #94a3b8)",
+                  whiteSpace: "nowrap",
+                  minWidth: "110px",
+                }}
+              >
+                Nome
+              </label>
+              <input
+                id="jwm-circuit-name-input"
+                type="text"
+                className="laboratory-circuit-name-input"
+                value={circuit?.name || ""}
+                placeholder="Novo Circuito"
+                maxLength={80}
+                onChange={(event) => {
+                  const nextName = event.target.value;
+                  setCircuit((current) => ({
+                    ...current,
+                    name: nextName,
+                  }));
+                }}
+                onKeyDown={(event) => {
+                  event.stopPropagation();
+                }}
+                style={{
+                  minWidth: "180px",
+                  flex: "1 1 200px",
+                  height: "34px",
+                  padding: "0 12px",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border, #1e293b)",
+                  background: "var(--bg-panel, #111827)",
+                  color: "var(--text-primary, #e2e8f0)",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  outline: "none",
+                }}
+              />
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: "10px",
+                flexWrap: "wrap",
+              }}
+            >
+              <label
+                htmlFor="jwm-circuit-desc-input"
+                style={{
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  color: "var(--text-secondary, #94a3b8)",
+                  whiteSpace: "nowrap",
+                  minWidth: "110px",
+                  paddingTop: "8px",
+                }}
+              >
+                Descrição
+              </label>
+              <textarea
+                id="jwm-circuit-desc-input"
+                className="laboratory-circuit-desc-input"
+                value={circuit?.description || ""}
+                placeholder="Breve descrição do circuito (opcional)"
+                maxLength={240}
+                rows={2}
+                onChange={(event) => {
+                  const nextDesc = event.target.value;
+                  setCircuit((current) => ({
+                    ...current,
+                    description: nextDesc,
+                  }));
+                }}
+                onKeyDown={(event) => {
+                  event.stopPropagation();
+                }}
+                style={{
+                  minWidth: "180px",
+                  flex: "1 1 200px",
+                  minHeight: "56px",
+                  padding: "8px 12px",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border, #1e293b)",
+                  background: "var(--bg-panel, #111827)",
+                  color: "var(--text-primary, #e2e8f0)",
+                  fontSize: "13px",
+                  fontWeight: 500,
+                  outline: "none",
+                  resize: "vertical",
+                  fontFamily: "inherit",
+                }}
+              />
+            </div>
+          </div>
+
           <p>
             Monte, configure e teste seus
             circuitos elétricos de forma
@@ -2107,20 +3132,195 @@ export default function Laboratory() {
             type="button"
             className="laboratory-action-button"
             onClick={handleSaveCircuit}
-            title="Salvar circuito"
+            title="Salvar circuito no computador (.json) — você pode nomear antes de baixar"
           >
             <Save size={18} />
             Salvar
           </button>
 
+          {/* Label nativo + input: forma mais confiável de abrir arquivo no browser */}
+          <input
+            ref={fileInputRef}
+            id="jwm-circuit-file-input"
+            type="file"
+            accept=".json,application/json,text/plain,text/json,*/*"
+            onChange={handleFileInputChange}
+            style={{
+              position: "absolute",
+              width: "1px",
+              height: "1px",
+              padding: 0,
+              margin: "-1px",
+              overflow: "hidden",
+              clip: "rect(0, 0, 0, 0)",
+              whiteSpace: "nowrap",
+              border: 0,
+            }}
+          />
+          <label
+            htmlFor="jwm-circuit-file-input"
+            className="laboratory-action-button"
+            onClick={handleOpenCircuit}
+            title="Abrir arquivo .json salvo. Segure Shift e clique para reabrir o último salvo no navegador."
+            style={{ cursor: "pointer" }}
+          >
+            <FolderOpen size={18} />
+            Abrir
+          </label>
+
+          <div style={{ position: "relative" }}>
+            <button
+              type="button"
+              className="laboratory-action-button"
+              onClick={() => setShowRecent((v) => !v)}
+              title="Circuitos salvos recentemente neste navegador"
+            >
+              <History size={18} />
+              Recentes
+              {recentCircuits.length > 0 ? (
+                <span
+                  style={{
+                    marginLeft: 2,
+                    fontSize: 11,
+                    opacity: 0.85,
+                  }}
+                >
+                  ({recentCircuits.length})
+                </span>
+              ) : null}
+            </button>
+
+            {showRecent ? (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "calc(100% + 6px)",
+                  right: 0,
+                  zIndex: 50,
+                  width: "320px",
+                  maxHeight: "360px",
+                  overflowY: "auto",
+                  borderRadius: "12px",
+                  border: "1px solid var(--border, #1e293b)",
+                  background: "var(--bg-panel, #0f172a)",
+                  boxShadow: "0 12px 40px rgba(0,0,0,0.45)",
+                  padding: "8px",
+                }}
+              >
+                {recentCircuits.length === 0 ? (
+                  <div
+                    style={{
+                      padding: "14px 12px",
+                      fontSize: "13px",
+                      color: "var(--text-secondary, #94a3b8)",
+                    }}
+                  >
+                    Nenhum circuito recente. Salve um circuito para aparecer aqui.
+                  </div>
+                ) : (
+                  recentCircuits.map((item) => (
+                    <button
+                      key={item.id + (item.savedAt || "")}
+                      type="button"
+                      onClick={() => handleOpenRecent(item)}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        textAlign: "left",
+                        padding: "10px 12px",
+                        marginBottom: "4px",
+                        borderRadius: "8px",
+                        border: "1px solid transparent",
+                        background: "transparent",
+                        color: "var(--text-primary, #e2e8f0)",
+                        cursor: "pointer",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background =
+                          "var(--bg-panel-2, #1a2332)";
+                        e.currentTarget.style.borderColor =
+                          "var(--border-focus, #3b82f6)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = "transparent";
+                        e.currentTarget.style.borderColor = "transparent";
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontWeight: 700,
+                          fontSize: "13px",
+                          marginBottom: 2,
+                        }}
+                      >
+                        {item.name || "Sem nome"}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "11px",
+                          color: "var(--text-secondary, #94a3b8)",
+                        }}
+                      >
+                        {(item.componentCount || 0) +
+                          " comp · " +
+                          (item.wireCount || 0) +
+                          " fios"}
+                        {item.savedAt
+                          ? " · " +
+                            new Date(item.savedAt).toLocaleString("pt-BR")
+                          : ""}
+                      </div>
+                      {item.description ? (
+                        <div
+                          style={{
+                            fontSize: "11px",
+                            color: "var(--text-secondary, #94a3b8)",
+                            marginTop: 4,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {item.description}
+                        </div>
+                      ) : null}
+                    </button>
+                  ))
+                )}
+
+                {recentCircuits.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={handleClearRecent}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      marginTop: "6px",
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      border: "1px solid var(--border, #1e293b)",
+                      background: "transparent",
+                      color: "var(--text-secondary, #94a3b8)",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Limpar lista
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+
           <button
             type="button"
             className="laboratory-action-button"
-            onClick={handleLoadCircuit}
-            title="Carregar circuito"
+            onClick={handleExportPdf}
+            title="Exportar circuito em PDF (com nome e descrição)"
           >
-            <FolderOpen size={18} />
-            Carregar
+            <FileDown size={18} />
+            PDF
           </button>
 
           <button
@@ -2153,14 +3353,97 @@ export default function Laboratory() {
 
       <section className="laboratory-toolbar">
 
-        <div className="toolbar-tool active">
+        <div className="toolbar-draw-tools" style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
 
-          <MousePointer2 size={18} />
+          <button
+            type="button"
+            className={`toolbar-tool ${drawTool === "select" ? "active" : ""}`}
+            onClick={() => {
+              setDrawTool("select");
+              setConnectionStart(null);
+              setConnectionWaypoints([]);
+              setMessage("Ferramenta: Selecionar. Clique em um componente para mover ou editar.");
+            }}
+            title="Selecionar / mover componentes"
+          >
+            <MousePointer2 size={18} />
+            <span>Selecionar</span>
+          </button>
 
-          <span>
-            Selecionar
-          </span>
+          <button
+            type="button"
+            className={`toolbar-tool ${drawTool === "wire" ? "active" : ""}`}
+            onClick={() => {
+              setDrawTool("wire");
+              setMessage(
+                "Ferramenta: Fio. Clique em um terminal, depois em outro (ou no quadro para cantos). Esc cancela."
+              );
+            }}
+            title="Desenhar fio entre terminais (estilo CADe SIMU)"
+          >
+            <Cable size={18} />
+            <span>Fio</span>
+          </button>
 
+          <button
+            type="button"
+            className={`toolbar-tool ${drawTool === "delete" ? "active" : ""}`}
+            onClick={() => {
+              setDrawTool("delete");
+              setConnectionStart(null);
+              setConnectionWaypoints([]);
+              setMessage("Ferramenta: Apagar. Clique em um componente ou fio para remover.");
+            }}
+            title="Apagar componente ou fio"
+          >
+            <Eraser size={18} />
+            <span>Apagar</span>
+          </button>
+
+          <button
+            type="button"
+            className={`toolbar-tool ${drawTool === "pan" ? "active" : ""}`}
+            onClick={() => {
+              setDrawTool("pan");
+              setConnectionStart(null);
+              setMessage("Ferramenta: Mão. Use o zoom e arraste a visualização do quadro.");
+            }}
+            title="Mão / navegação"
+          >
+            <Hand size={18} />
+            <span>Mão</span>
+          </button>
+
+        </div>
+
+        <div className="toolbar-view-modes">
+          <button
+            type="button"
+            className={`toolbar-view-btn ${viewMode === "blocos" ? "active" : ""}`}
+            onClick={() => setViewMode("blocos")}
+            title="Vista em blocos"
+          >
+            <LayoutGrid size={16} />
+            <span>Blocos</span>
+          </button>
+          <button
+            type="button"
+            className={`toolbar-view-btn ${viewMode === "esquema" ? "active" : ""}`}
+            onClick={() => setViewMode("esquema")}
+            title="Diagrama esquemático"
+          >
+            <PenLine size={16} />
+            <span>Esquema</span>
+          </button>
+          <button
+            type="button"
+            className={`toolbar-view-btn ${viewMode === "3d" ? "active" : ""}`}
+            onClick={() => setViewMode("3d")}
+            title="Vista 3D"
+          >
+            <Boxes size={16} />
+            <span>3D</span>
+          </button>
         </div>
 
 
@@ -2186,9 +3469,67 @@ export default function Laboratory() {
         <div className="toolbar-message">
 
           {connectionStart
-            ? "Mova o mouse até outro terminal para conectar. (Esc para cancelar)"
+            ? "Ligando fio… clique em outro terminal ou no quadro para cantos. (Esc cancela)"
             : message}
 
+        </div>
+
+
+        <div
+          className="toolbar-rotation"
+          title="Girar componente selecionado (0–360°)"
+        >
+          <button
+            type="button"
+            className="zoom-button"
+            onClick={() => handleRotateStep(-15)}
+            title="Girar componente -15°"
+            disabled={!selectedComponent}
+          >
+            <RotateCcw size={14} />
+          </button>
+
+          <input
+            type="range"
+            min="0"
+            max="360"
+            step="1"
+            value={selectedRotation}
+            onChange={handleRotationChange}
+            className="rotation-slider"
+            aria-label="Rotação do componente"
+            disabled={!selectedComponent}
+          />
+
+          <button
+            type="button"
+            className="zoom-button zoom-value"
+            onClick={handleRotationReset}
+            title="Zerar rotação do componente"
+            disabled={!selectedComponent}
+          >
+            {selectedRotation}°
+          </button>
+
+          <button
+            type="button"
+            className="zoom-button"
+            onClick={() => handleRotateStep(15)}
+            title="Girar componente +15°"
+            disabled={!selectedComponent}
+          >
+            <RotateCw size={14} />
+          </button>
+
+          <button
+            type="button"
+            className="zoom-button"
+            onClick={() => handleRotateStep(90)}
+            title="Girar 90°"
+            disabled={!selectedComponent}
+          >
+            90°
+          </button>
         </div>
 
 
@@ -2718,14 +4059,23 @@ export default function Laboratory() {
 
           <div
             ref={boardRef}
-            className={`circuit-board circuit-grid-background ${
-              connectionStart
-                ? "connection-mode"
-                : ""
-            }`}
+            className={[
+              "circuit-board",
+              "circuit-grid-background",
+              connectionStart || drawTool === "wire" ? "connection-mode" : "",
+              drawTool === "delete" ? "delete-mode" : "",
+              drawTool === "pan" ? "pan-mode" : "",
+              `view-${viewMode}`,
+            ]
+              .filter(Boolean)
+              .join(" ")}
             style={{
-              transform: `scale(${zoom})`,
-              transformOrigin: "top left",
+              transform:
+                viewMode === "3d"
+                  ? `perspective(1000px) rotateX(18deg) scale(${zoom})`
+                  : `scale(${zoom})`,
+              transformOrigin:
+                viewMode === "3d" ? "center center" : "top left",
             }}
             onClick={
               handleBoardClick
@@ -2736,6 +4086,8 @@ export default function Laboratory() {
             onMouseUp={
               handleCompleteConnection
             }
+            onDragOver={handleDragOverCircuitFile}
+            onDrop={handleDropCircuitFile}
           >
 
             {/* ==================================================
@@ -2770,6 +4122,8 @@ export default function Laboratory() {
               energized={
                 simulation.energized
               }
+              layoutKey={`${viewMode}-${zoom}-${selectedRotation}-${circuit.components?.map((c) => c.rotation || 0).join(",")}`}
+              viewMode={viewMode}
             />
 
 
@@ -2814,6 +4168,10 @@ export default function Laboratory() {
 
                   connectionStart={
                     connectionStart
+                  }
+
+                  viewMode={
+                    viewMode
                   }
 
                   onSelect={
@@ -3090,32 +4448,156 @@ export default function Laboratory() {
 
 
           {/* ==================================================
-              LEI DE OHM
+              FÓRMULAS E CÁLCULOS
           ================================================== */}
 
-          <section className="ohm-card">
+          <section className="formulas-panel">
 
-            <div>
-
-              <span className="panel-kicker">
-                CONCEITO
-              </span>
-
-              <h2>
-                Lei de Ohm
-              </h2>
-
-              <p>
-                A corrente elétrica pode ser
-                calculada pela relação entre tensão
-                e resistência.
-              </p>
-
+            <div className="formulas-heading">
+              <div>
+                <span className="panel-kicker">
+                  CONCEITOS
+                </span>
+                <h2>
+                  Fórmulas e cálculos
+                </h2>
+                <p>
+                  Relações elétricas aplicadas ao circuito atual.
+                </p>
+              </div>
             </div>
 
+            <div className="formulas-grid">
 
-            <div className="formula">
-              I = V / R
+              <div className="formula-card">
+                <strong>Lei de Ohm</strong>
+                <code>I = V / R</code>
+                <small>
+                  {Number(simulation.resistance) > 0
+                    ? `I = ${simulation.voltage} / ${simulation.resistance} = ${(
+                        Number(simulation.voltage) /
+                        Number(simulation.resistance)
+                      ).toFixed(4)} A`
+                    : "Informe R > 0"}
+                </small>
+                <code>V = I × R</code>
+                <small>
+                  V = {simulation.current} × {simulation.resistance} = {(
+                    Number(simulation.current) *
+                    Number(simulation.resistance)
+                  ).toFixed(4)} V
+                </small>
+                <code>R = V / I</code>
+                <small>
+                  {Number(simulation.current) > 0
+                    ? `R = ${simulation.voltage} / ${simulation.current} = ${(
+                        Number(simulation.voltage) /
+                        Number(simulation.current)
+                      ).toFixed(4)} Ω`
+                    : "Sem corrente"}
+                </small>
+              </div>
+
+              <div className="formula-card">
+                <strong>Potência elétrica</strong>
+                <code>P = V × I</code>
+                <small>
+                  P = {simulation.voltage} × {simulation.current} = {(
+                    Number(simulation.voltage) *
+                    Number(simulation.current)
+                  ).toFixed(4)} W
+                </small>
+                <code>P = I² × R</code>
+                <small>
+                  P = ({simulation.current})² × {simulation.resistance} = {(
+                    Number(simulation.current) ** 2 *
+                    Number(simulation.resistance)
+                  ).toFixed(4)} W
+                </small>
+                <code>P = V² / R</code>
+                <small>
+                  {Number(simulation.resistance) > 0
+                    ? `P = (${simulation.voltage})² / ${simulation.resistance} = ${(
+                        (Number(simulation.voltage) ** 2) /
+                        Number(simulation.resistance)
+                      ).toFixed(4)} W`
+                    : "Informe R > 0"}
+                </small>
+              </div>
+
+              <div className="formula-card">
+                <strong>Energia</strong>
+                <code>E = P × t</code>
+                <small>
+                  Em 1 s: E = {simulation.power} × 1 = {Number(simulation.power).toFixed(4)} J
+                </small>
+                <small>
+                  Em 1 min: E = {simulation.power} × 60 = {(
+                    Number(simulation.power) * 60
+                  ).toFixed(4)} J
+                </small>
+                <code>E = ½ C V²</code>
+                <small>
+                  {simulation.reactive?.capacitor
+                    ? `E ≈ ${simulation.reactive.capacitor.energyJ ?? 0} J`
+                    : "Sem capacitor no circuito"}
+                </small>
+                <code>E = ½ L I²</code>
+                <small>
+                  {simulation.reactive?.inductor
+                    ? `E ≈ ${simulation.reactive.inductor.energyJ ?? 0} J`
+                    : "Sem indutor no circuito"}
+                </small>
+              </div>
+
+              <div className="formula-card">
+                <strong>Constantes de tempo</strong>
+                <code>τ = R × C</code>
+                <small>
+                  {simulation.reactive?.capacitor?.tauMs != null
+                    ? `τ = ${simulation.reactive.capacitor.tauMs} ms`
+                    : "Precisa de R e C"}
+                </small>
+                <code>τ = L / R</code>
+                <small>
+                  {simulation.reactive?.inductor?.tauMs != null
+                    ? `τ = ${simulation.reactive.inductor.tauMs} ms`
+                    : "Precisa de L e R"}
+                </small>
+                <code>t ≈ 5τ</code>
+                <small>
+                  Tempo para regime permanente (~99%)
+                </small>
+              </div>
+
+              <div className="formula-card">
+                <strong>Resistências associadas</strong>
+                <code>Série: R<sub>eq</sub> = R₁ + R₂</code>
+                <small>
+                  Soma das resistências no mesmo ramo
+                </small>
+                <code>Paralelo: 1/R<sub>eq</sub> = 1/R₁ + 1/R₂</code>
+                <small>
+                  R<sub>eq</sub> atual do circuito ≈ {simulation.resistance} Ω
+                </small>
+              </div>
+
+              <div className="formula-card">
+                <strong>Resumo do circuito</strong>
+                <small>
+                  Status: {simulation.energized ? "Energizado" : "Desligado / aberto"}
+                </small>
+                <small>
+                  Componentes: {(circuit.components || []).length}
+                </small>
+                <small>
+                  Conexões (fios): {(circuit.wires || []).length}
+                </small>
+                <small>
+                  Cargas energizadas: {(simulation.energizedLoadIds || []).length}
+                </small>
+              </div>
+
             </div>
 
           </section>

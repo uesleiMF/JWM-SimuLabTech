@@ -52,6 +52,12 @@ export function getComponentTerminals(component) {
      * INTERRUPTOR
      */
     case COMPONENT_TYPES.SWITCH:
+    case COMPONENT_TYPES.PUSH_BUTTON_NO:
+    case COMPONENT_TYPES.PUSH_BUTTON_NC:
+    case COMPONENT_TYPES.CONTACTOR:
+    case COMPONENT_TYPES.BREAKER:
+    case COMPONENT_TYPES.FUSE_ISOLATOR:
+    case COMPONENT_TYPES.THERMAL_RELAY:
       return [
         {
           id: "input",

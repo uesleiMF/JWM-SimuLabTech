@@ -1,14 +1,15 @@
 .header {
-  height: 70px;
-  background: white;
-  border-bottom: 1px solid #e2e8f0;
+  height: 64px;
+  background: var(--bg-header, #0f172a);
+  border-bottom: 1px solid var(--border, #1e293b);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 28px;
+  padding: 0 24px;
   position: sticky;
   top: 0;
   z-index: 900;
+  color: var(--text, #e2e8f0);
 }
 
 .header-left {
@@ -22,21 +23,30 @@
   display: none;
   border: none;
   background: transparent;
-  color: #334155;
+  color: var(--text-secondary, #94a3b8);
   cursor: pointer;
+}
+
+.mobile-menu-button:hover {
+  color: var(--text, #e2e8f0);
 }
 
 .header-search {
   width: min(440px, 45vw);
   height: 40px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  background: var(--bg-panel, #111827);
+  border: 1px solid var(--border, #1e293b);
+  border-radius: 10px;
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 0 11px;
-  color: #94a3b8;
+  padding: 0 12px;
+  color: var(--text-muted, #64748b);
+  transition: border-color 0.2s ease;
+}
+
+.header-search:focus-within {
+  border-color: var(--primary, #3b82f6);
 }
 
 .header-search input {
@@ -45,135 +55,92 @@
   border: none;
   outline: none;
   background: transparent;
-  color: #334155;
+  color: var(--text, #e2e8f0);
   font-size: 13px;
 }
 
 .header-search input::placeholder {
-  color: #94a3b8;
+  color: var(--text-muted, #64748b);
 }
 
 .header-search kbd {
-  background: white;
-  border: 1px solid #e2e8f0;
+  background: var(--bg-panel-2, #1a2332);
+  border: 1px solid var(--border-light, #334155);
   border-radius: 5px;
   padding: 3px 6px;
-  font-size: 10px;
-  color: #64748b;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.header-icon-button {
-  width: 38px;
-  height: 38px;
-  border: 1px solid #e2e8f0;
-  background: white;
-  color: #64748b;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  position: relative;
-}
-
-.header-icon-button:hover {
-  background: #f8fafc;
-  color: #2563eb;
-}
-
-.notification-dot {
-  position: absolute;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #ef4444;
-  top: 7px;
-  right: 7px;
-  border: 1px solid white;
-}
-
-.header-profile {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin-left: 8px;
-  padding-left: 14px;
-  border-left: 1px solid #e2e8f0;
-  cursor: pointer;
-  color: #64748b;
-}
-
-.header-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: #dbeafe;
-  color: #1d4ed8;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   font-size: 11px;
-  font-weight: 700;
+  color: var(--text-muted, #64748b);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
 }
 
 .header-user {
   display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.header-user:hover {
+  background: var(--bg-panel-2, #1a2332);
+}
+
+.header-user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.header-user-info {
+  display: flex;
   flex-direction: column;
+  line-height: 1.2;
 }
 
-.header-user strong {
-  color: #1e293b;
-  font-size: 12px;
+.header-user-info strong {
+  font-size: 13px;
+  color: var(--text, #e2e8f0);
 }
 
-.header-user span {
-  color: #94a3b8;
-  font-size: 10px;
-  margin-top: 2px;
+.header-user-info span {
+  font-size: 11px;
+  color: var(--text-muted, #64748b);
 }
 
 @media (max-width: 900px) {
   .mobile-menu-button {
-    display: flex;
-  }
-
-  .header {
-    padding: 0 20px;
+    display: inline-flex;
   }
 
   .header-search {
-    width: min(380px, 50vw);
+    width: min(280px, 40vw);
   }
 }
 
-@media (max-width: 650px) {
+@media (max-width: 600px) {
   .header {
     padding: 0 14px;
   }
 
   .header-search {
-    width: 42px;
-    padding: 0 11px;
-  }
-
-  .header-search input,
-  .header-search kbd {
     display: none;
   }
 
-  .header-profile {
-    margin-left: 2px;
-    padding-left: 8px;
-  }
-
-  .header-user,
-  .header-profile > svg {
+  .header-user-info {
     display: none;
   }
 }

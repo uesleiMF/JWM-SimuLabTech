@@ -17,4 +17,6 @@ export const COMPONENT_TYPES = {
   CONTACTOR: "contactor",           // Contator (contatos de potência)
   INDICATOR: "indicator",           // Sinalizador luminoso
   BREAKER: "breaker",               // Disjuntor
+  FUSE_ISOLATOR: "fuse_isolator",   // Seccionador com fusível (FU / NH)
+  THERMAL_RELAY: "thermal_relay",   // Relé térmico de sobrecarga (RT)
 };

@@ -27,10 +27,11 @@ function isValidNumber(value) {
 }
 
 function isPositiveNumber(value) {
-  return (
-    isValidNumber(value) &&
-    value > 0
-  );
+  return isValidNumber(value) && value > 0;
+}
+
+function isNonNegativeNumber(value) {
+  return isValidNumber(value) && value >= 0;
 }
 
 // --------------------------------------------------
@@ -48,7 +49,7 @@ function isPositiveNumber(value) {
  */
 export function calculateCurrent(voltage, resistance) {
   if (
-    !isPositiveNumber(voltage) ||
+    !isNonNegativeNumber(voltage) ||
     !isPositiveNumber(resistance)
   ) {
     return null;
@@ -69,7 +70,7 @@ export function calculateCurrent(voltage, resistance) {
 export function calculateVoltage(resistance, current) {
   if (
     !isPositiveNumber(resistance) ||
-    !isPositiveNumber(current)
+    !isNonNegativeNumber(current)
   ) {
     return null;
   }
@@ -88,7 +89,7 @@ export function calculateVoltage(resistance, current) {
  */
 export function calculateResistance(voltage, current) {
   if (
-    !isPositiveNumber(voltage) ||
+    !isNonNegativeNumber(voltage) ||
     !isPositiveNumber(current)
   ) {
     return null;
@@ -112,8 +113,8 @@ export function calculateResistance(voltage, current) {
  */
 export function calculatePowerVI(voltage, current) {
   if (
-    !isPositiveNumber(voltage) ||
-    !isPositiveNumber(current)
+    !isNonNegativeNumber(voltage) ||
+    !isNonNegativeNumber(current)
   ) {
     return null;
   }
@@ -132,7 +133,7 @@ export function calculatePowerVI(voltage, current) {
  */
 export function calculatePowerIR(current, resistance) {
   if (
-    !isPositiveNumber(current) ||
+    !isNonNegativeNumber(current) ||
     !isPositiveNumber(resistance)
   ) {
     return null;
@@ -152,7 +153,7 @@ export function calculatePowerIR(current, resistance) {
  */
 export function calculatePowerVR(voltage, resistance) {
   if (
-    !isPositiveNumber(voltage) ||
+    !isNonNegativeNumber(voltage) ||
     !isPositiveNumber(resistance)
   ) {
     return null;
@@ -173,8 +174,8 @@ export function calculateOhmLaw({
   current = null,
   resistance = null,
 } = {}) {
-  const hasVoltage = isPositiveNumber(voltage);
-  const hasCurrent = isPositiveNumber(current);
+  const hasVoltage = isNonNegativeNumber(voltage);
+  const hasCurrent = isNonNegativeNumber(current);
   const hasResistance = isPositiveNumber(resistance);
 
   // V + R → calcula I
@@ -263,8 +264,8 @@ export function calculatePower({
   current = null,
   resistance = null,
 } = {}) {
-  const hasVoltage = isPositiveNumber(voltage);
-  const hasCurrent = isPositiveNumber(current);
+  const hasVoltage = isNonNegativeNumber(voltage);
+  const hasCurrent = isNonNegativeNumber(current);
   const hasResistance = isPositiveNumber(resistance);
 
   // V + I
@@ -390,7 +391,7 @@ export function calculateTauRL(inductanceHenries, resistance) {
  */
 export function capacitorChargeVoltage(voltage, time, tau) {
   if (
-    !isPositiveNumber(voltage) ||
+    !isNonNegativeNumber(voltage) ||
     !isValidNumber(time) ||
     time < 0 ||
     !isPositiveNumber(tau)
@@ -406,7 +407,7 @@ export function capacitorChargeVoltage(voltage, time, tau) {
  */
 export function capacitorDischargeVoltage(initialVoltage, time, tau) {
   if (
-    !isPositiveNumber(initialVoltage) ||
+    !isNonNegativeNumber(initialVoltage) ||
     !isValidNumber(time) ||
     time < 0 ||
     !isPositiveNumber(tau)
@@ -422,7 +423,7 @@ export function capacitorDischargeVoltage(initialVoltage, time, tau) {
  */
 export function inductorCurrentRise(voltage, resistance, time, tau) {
   if (
-    !isPositiveNumber(voltage) ||
+    !isNonNegativeNumber(voltage) ||
     !isPositiveNumber(resistance) ||
     !isValidNumber(time) ||
     time < 0 ||
@@ -440,7 +441,7 @@ export function inductorCurrentRise(voltage, resistance, time, tau) {
  */
 export function inductorCurrentDecay(initialCurrent, time, tau) {
   if (
-    !isPositiveNumber(initialCurrent) ||
+    !isNonNegativeNumber(initialCurrent) ||
     !isValidNumber(time) ||
     time < 0 ||
     !isPositiveNumber(tau)

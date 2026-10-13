@@ -25,6 +25,8 @@ const CONTROL_TYPES = [
   COMPONENT_TYPES.PUSH_BUTTON_NC,
   COMPONENT_TYPES.CONTACTOR,
   COMPONENT_TYPES.BREAKER,
+  COMPONENT_TYPES.FUSE_ISOLATOR,
+  COMPONENT_TYPES.THERMAL_RELAY,
 ];
 
 const LOAD_TYPES = [
@@ -426,6 +428,8 @@ function addComponentInternalConnections(
     case COMPONENT_TYPES.PUSH_BUTTON_NC:
     case COMPONENT_TYPES.CONTACTOR:
     case COMPONENT_TYPES.BREAKER:
+    case COMPONENT_TYPES.FUSE_ISOLATOR:
+    case COMPONENT_TYPES.THERMAL_RELAY:
       if (isControlDeviceClosed(component)) {
         addInternalConnection(
           graph,
@@ -540,6 +544,8 @@ function getComponentTerminalIds(component) {
     case COMPONENT_TYPES.PUSH_BUTTON_NC:
     case COMPONENT_TYPES.CONTACTOR:
     case COMPONENT_TYPES.BREAKER:
+    case COMPONENT_TYPES.FUSE_ISOLATOR:
+    case COMPONENT_TYPES.THERMAL_RELAY:
     case COMPONENT_TYPES.LAMP:
     case COMPONENT_TYPES.INDICATOR:
     case COMPONENT_TYPES.MOTOR:
@@ -741,9 +747,14 @@ export function isCircuitComplete(circuit) {
   const source = getSource(circuit);
   const loads = getLoads(circuit);
 
-  // Basta ter fonte e pelo menos uma carga.
-  // O interruptor é opcional (pode ligar carga direto na fonte).
-  return Boolean(source && loads.length > 0);
+  if (!source || loads.length === 0) {
+    return false;
+  }
+
+  // Não basta haver uma fonte e uma carga no quadro:
+  // pelo menos uma carga precisa estar ligada aos dois
+  // polos da fonte por caminhos elétricos válidos.
+  return loads.some((load) => isLoadConnected(circuit, load));
 }
 
 /* ==================================================
