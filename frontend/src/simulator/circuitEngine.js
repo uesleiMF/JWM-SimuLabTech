@@ -376,6 +376,14 @@ function isControlDeviceClosed(component) {
     return false;
   }
 
+  // Fusível queimado ou proteção desarmada não conduzem
+  if (
+    component.burned === true ||
+    component.tripped === true
+  ) {
+    return false;
+  }
+
   return isSwitchClosed(component);
 }
 
@@ -392,9 +400,34 @@ function isSourceEnabled(source) {
    ADICIONAR CONEXÕES INTERNAS DOS COMPONENTES
 ================================================== */
 
+function getSourceModeFromCircuit(circuit) {
+  const source = Array.isArray(circuit?.components)
+    ? circuit.components.find(
+        (c) => c?.type === COMPONENT_TYPES.SOURCE
+      )
+    : null;
+  return String(source?.mode || "DC").toUpperCase() === "AC"
+    ? "AC"
+    : "DC";
+}
+
+function getSourceFrequencyFromCircuit(circuit) {
+  const source = Array.isArray(circuit?.components)
+    ? circuit.components.find(
+        (c) => c?.type === COMPONENT_TYPES.SOURCE
+      )
+    : null;
+  if (getSourceModeFromCircuit(circuit) !== "AC") {
+    return 0;
+  }
+  const f = Number(source?.frequency);
+  return Number.isFinite(f) && f > 0 ? f : 60;
+}
+
 function addComponentInternalConnections(
   graph,
-  component
+  component,
+  options = {}
 ) {
   if (
     !component?.id ||
@@ -426,11 +459,27 @@ function addComponentInternalConnections(
     case COMPONENT_TYPES.SWITCH:
     case COMPONENT_TYPES.PUSH_BUTTON_NO:
     case COMPONENT_TYPES.PUSH_BUTTON_NC:
-    case COMPONENT_TYPES.CONTACTOR:
     case COMPONENT_TYPES.BREAKER:
     case COMPONENT_TYPES.FUSE_ISOLATOR:
     case COMPONENT_TYPES.THERMAL_RELAY:
       if (isControlDeviceClosed(component)) {
+        addInternalConnection(
+          graph,
+          componentId,
+          "input",
+          "output"
+        );
+      }
+      break;
+
+    /* Contator: contatos fechados só se bobina energizada
+       (aplicado depois no buildCircuitGraph) */
+    case COMPONENT_TYPES.CONTACTOR:
+      break;
+
+    /* Temporizador: contato fecha após atraso (value === true) */
+    case COMPONENT_TYPES.TIMER_ON_DELAY:
+      if (isSwitchClosed(component)) {
         addInternalConnection(
           graph,
           componentId,
@@ -486,8 +535,8 @@ function addComponentInternalConnections(
 
     case COMPONENT_TYPES.INDUCTOR:
       /*
-       * Aproximação de regime permanente DC:
-       * o indutor é representado como condutor.
+       * DC: curto (regime permanente).
+       * AC: caminho existe; impedância XL na análise.
        */
       addInternalConnection(
         graph,
@@ -503,12 +552,17 @@ function addComponentInternalConnections(
 
     case COMPONENT_TYPES.CAPACITOR:
       /*
-       * Aproximação de regime permanente DC:
-       * o capacitor é representado como circuito aberto.
-       *
-       * A análise transitória RC é calculada separadamente
-       * por getReactiveAnalysis().
+       * DC: aberto (regime permanente).
+       * AC: caminho existe; impedância XC na análise.
        */
+      if (options?.sourceMode === "AC") {
+        addInternalConnection(
+          graph,
+          componentId,
+          "input",
+          "output"
+        );
+      }
       break;
 
     /* ==========================================
@@ -543,6 +597,11 @@ function getComponentTerminalIds(component) {
     case COMPONENT_TYPES.PUSH_BUTTON_NO:
     case COMPONENT_TYPES.PUSH_BUTTON_NC:
     case COMPONENT_TYPES.CONTACTOR:
+      return ["a1", "a2", "input", "output", "aux_in", "aux_out"];
+
+    case COMPONENT_TYPES.TIMER_ON_DELAY:
+      return ["a1", "a2", "input", "output"];
+
     case COMPONENT_TYPES.BREAKER:
     case COMPONENT_TYPES.FUSE_ISOLATOR:
     case COMPONENT_TYPES.THERMAL_RELAY:
@@ -563,82 +622,176 @@ function getComponentTerminalIds(component) {
 ================================================== */
 
 export function buildCircuitGraph(circuit) {
-  const graph = new Map();
+  // Usa grafo base com iteração de selo do contator
+  return buildBaseGraphWithoutContactorContacts(circuit);
+}
 
+/**
+ * Verifica se a bobina A1/A2 de um contator ou temporizador
+ * está alimentada (caminho até a fonte).
+ */
+export function isCoilEnergized(
+  graph,
+  component,
+  sourcePos,
+  sourceNeg
+) {
+  if (!graph || !component || !sourcePos || !sourceNeg) {
+    return false;
+  }
+
+  const a1 = createNodeKey(component.id, "a1");
+  const a2 = createNodeKey(component.id, "a2");
+
+  if (!a1 || !a2) {
+    return false;
+  }
+
+  // Polaridade livre: A1 no + e A2 no −, ou o inverso
+  const path1 =
+    hasPath(graph, sourcePos, a1) &&
+    hasPath(graph, a2, sourceNeg);
+
+  const path2 =
+    hasPath(graph, sourcePos, a2) &&
+    hasPath(graph, a1, sourceNeg);
+
+  return path1 || path2;
+}
+
+/**
+ * Lista contatores com bobina energizada no circuito atual.
+ */
+export function getEnergizedContactors(circuit) {
   const components = Array.isArray(circuit?.components)
     ? circuit.components
     : [];
 
-  /*
-   * 1. Criar os nós dos terminais.
-   */
+  const source = components.find(
+    (c) => c?.type === COMPONENT_TYPES.SOURCE
+  );
+
+  if (!source || !isSourceEnabled(source)) {
+    return [];
+  }
+
+  // Grafo sem fechar contatores pela bobina ainda é construído
+  // dentro de buildCircuitGraph (que já fecha se bobina ok).
+  // Aqui usamos um grafo "base" sem contatos do contator:
+  const graph = buildBaseGraphWithoutContactorContacts(circuit);
+  const sourcePos = createNodeKey(source.id, "positive");
+  const sourceNeg = createNodeKey(source.id, "negative");
+
+  return components.filter(
+    (c) =>
+      c?.type === COMPONENT_TYPES.CONTACTOR &&
+      isComponentEnabled(c) &&
+      isCoilEnergized(graph, c, sourcePos, sourceNeg)
+  );
+}
+
+/**
+ * Grafo apenas com fios + dispositivos de comando simples
+ * (sem fechar contatos de contator pela bobina).
+ * Usado para avaliar bobinas e temporizadores.
+ */
+function buildBaseGraphWithoutContactorContacts(circuit) {
+  const graph = new Map();
+  const components = Array.isArray(circuit?.components)
+    ? circuit.components
+    : [];
 
   components.forEach((component) => {
-    if (!component?.id) {
-      return;
-    }
-
+    if (!component?.id) return;
     const terminals = getComponentTerminalIds(component);
-
     terminals.forEach((terminalId) => {
-      const node = createNodeKey(
-        component.id,
-        terminalId
+      ensureGraphNode(
+        graph,
+        createNodeKey(component.id, terminalId)
       );
-
-      ensureGraphNode(graph, node);
     });
   });
 
-  /*
-   * 2. Adicionar as conexões internas.
-   */
+  const graphOptions = {
+    sourceMode: getSourceModeFromCircuit(circuit),
+    frequency: getSourceFrequencyFromCircuit(circuit),
+  };
 
   components.forEach((component) => {
+    if (component?.type === COMPONENT_TYPES.CONTACTOR) {
+      return; // não fecha contatos aqui
+    }
     addComponentInternalConnections(
       graph,
-      component
+      component,
+      graphOptions
     );
   });
-
-  /*
-   * 3. Adicionar os fios elétricos.
-   */
 
   const wires = getConnections(circuit);
-
   wires.forEach((wire) => {
-    if (!wire) {
-      return;
-    }
-
-    if (
-      wire.type &&
-      wire.type !== "electrical"
-    ) {
-      return;
-    }
-
-    if (
-      wire.status &&
-      wire.status !== "active"
-    ) {
-      return;
-    }
-
+    if (!wire) return;
+    if (wire.type && wire.type !== "electrical") return;
+    if (wire.status && wire.status !== "active") return;
     const from = getWireNodeKey(wire.from);
     const to = getWireNodeKey(wire.to);
-
-    if (!from || !to) {
-      return;
-    }
-
-    addGraphConnection(
-      graph,
-      from,
-      to
-    );
+    if (!from || !to) return;
+    addGraphConnection(graph, from, to);
   });
+
+  // Auto-selo: se algum contator já tinha bobina alimentada
+  // via caminho que inclui seu próprio auxiliar, precisamos
+  // de iteração. Fazemos até 3 passes.
+  const source = components.find(
+    (c) => c?.type === COMPONENT_TYPES.SOURCE
+  );
+  if (source && isSourceEnabled(source)) {
+    const sourcePos = createNodeKey(source.id, "positive");
+    const sourceNeg = createNodeKey(source.id, "negative");
+
+    for (let pass = 0; pass < 3; pass += 1) {
+      let changed = false;
+      components.forEach((component) => {
+        if (
+          component?.type !== COMPONENT_TYPES.CONTACTOR ||
+          !isComponentEnabled(component)
+        ) {
+          return;
+        }
+        if (
+          isCoilEnergized(
+            graph,
+            component,
+            sourcePos,
+            sourceNeg
+          )
+        ) {
+          const before = graph.get(
+            createNodeKey(component.id, "aux_in")
+          );
+          addInternalConnection(
+            graph,
+            component.id,
+            "aux_in",
+            "aux_out"
+          );
+          addInternalConnection(
+            graph,
+            component.id,
+            "input",
+            "output"
+          );
+          const after = graph.get(
+            createNodeKey(component.id, "aux_in")
+          );
+          if (before?.size !== after?.size) {
+            changed = true;
+          }
+        }
+      });
+      if (!changed) break;
+    }
+  }
 
   return graph;
 }
@@ -1083,84 +1236,163 @@ export function isCircuitEnergized(circuit) {
    RESISTÊNCIA EFETIVA
 ================================================== */
 
-function getEffectiveResistance(circuit) {
-  /*
-   * Primeiro, utiliza o resistor explícito,
-   * se houver um valor válido.
-   */
-
-  const resistor = getResistor(circuit);
-
-  if (resistor) {
-    const resistance = Number(resistor.value);
-
-    if (
-      Number.isFinite(resistance) &&
-      resistance > 0
-    ) {
-      return resistance;
-    }
+/**
+ * Impedância de magnitude de um componente (Ω).
+ * AC: inclui XC e XL; DC: resistor/cargas, indutor ~0, capacitor aberto.
+ */
+function getComponentImpedanceMagnitude(
+  component,
+  sourceMode,
+  frequencyHz
+) {
+  if (!component || component.enabled === false) {
+    return null;
   }
 
-  /*
-   * Depois, considera as resistências informadas
-   * nas cargas que estão efetivamente energizadas.
-   */
+  const mode = sourceMode === "AC" ? "AC" : "DC";
+  const f = Math.max(Number(frequencyHz) || 60, 1);
+  const omega = 2 * Math.PI * f;
 
+  switch (component.type) {
+    case COMPONENT_TYPES.RESISTOR: {
+      const R = Number(component.value);
+      return Number.isFinite(R) && R > 0 ? R : null;
+    }
+
+    case COMPONENT_TYPES.CAPACITOR: {
+      if (mode !== "AC") {
+        return null; // aberto em DC
+      }
+      const uF = Number(component.value);
+      if (!Number.isFinite(uF) || uF <= 0) {
+        return null;
+      }
+      const C = uF * 1e-6;
+      const XC = 1 / (omega * C);
+      return Number.isFinite(XC) && XC > 0 ? XC : null;
+    }
+
+    case COMPONENT_TYPES.INDUCTOR: {
+      const mH = Number(component.value);
+      if (!Number.isFinite(mH) || mH < 0) {
+        return null;
+      }
+      if (mode === "DC") {
+        return 0.01; // quase curto
+      }
+      const L = mH * 1e-3;
+      const XL = omega * L;
+      return Number.isFinite(XL) && XL > 0 ? XL : 0.01;
+    }
+
+    case COMPONENT_TYPES.MOTOR: {
+      const R = Number(component.resistance);
+      return Number.isFinite(R) && R > 0 ? R : 10;
+    }
+
+    case COMPONENT_TYPES.LAMP:
+    case COMPONENT_TYPES.INDICATOR: {
+      const R = Number(component.resistance);
+      return Number.isFinite(R) && R > 0 ? R : 20;
+    }
+
+    case COMPONENT_TYPES.LED: {
+      // Modelo educativo: conduz em AC e DC (magnitude)
+      const R = Number(component.resistance);
+      return Number.isFinite(R) && R > 0 ? R : 100;
+    }
+
+    default:
+      return null;
+  }
+}
+
+function getEffectiveResistance(circuit) {
+  const sourceMode = getSourceModeFromCircuit(circuit);
+  const frequency = getSourceFrequencyFromCircuit(circuit);
+  const components = Array.isArray(circuit?.components)
+    ? circuit.components
+    : [];
+
+  const magnitudes = [];
+
+  // Resistor / capacitor / indutor no quadro
+  components.forEach((comp) => {
+    if (
+      ![
+        COMPONENT_TYPES.RESISTOR,
+        COMPONENT_TYPES.CAPACITOR,
+        COMPONENT_TYPES.INDUCTOR,
+      ].includes(comp?.type)
+    ) {
+      return;
+    }
+    // Capacitor em DC não entra
+    if (
+      comp.type === COMPONENT_TYPES.CAPACITOR &&
+      sourceMode !== "AC"
+    ) {
+      return;
+    }
+    // Só conta se houver caminho (carga/passivo energizável)
+    const z = getComponentImpedanceMagnitude(
+      comp,
+      sourceMode,
+      frequency
+    );
+    if (z != null && z > 0) {
+      // Resistor sempre conta se presente; C/L se no circuito fechado
+      if (comp.type === COMPONENT_TYPES.RESISTOR) {
+        magnitudes.push(z);
+      } else if (
+        isLoadEnergized(circuit, comp) ||
+        hasClosedCircuit(circuit)
+      ) {
+        magnitudes.push(z);
+      }
+    }
+  });
+
+  // Cargas energizadas
   const connectedLoads = getLoads(circuit).filter(
     (load) => isLoadEnergized(circuit, load)
   );
 
-  const resistances = connectedLoads
-    .map((load) => Number(load.resistance))
-    .filter(
-      (value) =>
-        Number.isFinite(value) &&
-        value > 0
+  connectedLoads.forEach((load) => {
+    const z = getComponentImpedanceMagnitude(
+      load,
+      sourceMode,
+      frequency
     );
+    if (z != null && z > 0) {
+      magnitudes.push(z);
+    }
+  });
 
-  /*
-   * Aproximação: cargas com resistência configurada
-   * são consideradas em paralelo.
-   */
-
-  if (resistances.length > 0) {
-    const inverseResistance = resistances.reduce(
-      (total, resistance) =>
-        total + 1 / resistance,
+  // Paralelo das magnitudes (aproximação educativa)
+  if (magnitudes.length > 0) {
+    const inverse = magnitudes.reduce(
+      (total, z) => total + 1 / z,
       0
     );
-
-    if (inverseResistance > 0) {
-      return 1 / inverseResistance;
+    if (inverse > 0) {
+      return 1 / inverse;
     }
   }
 
-  const hasMotor = connectedLoads.some(
-    (load) =>
-      load.type === COMPONENT_TYPES.MOTOR
-  );
-
-  const hasLamp = connectedLoads.some(
-    (load) =>
-      load.type === COMPONENT_TYPES.LAMP ||
-      load.type === COMPONENT_TYPES.INDICATOR
-  );
-
-  const hasLed = connectedLoads.some(
-    (load) =>
-      load.type === COMPONENT_TYPES.LED
-  );
-
-  if (hasMotor) {
+  if (connectedLoads.some((l) => l.type === COMPONENT_TYPES.MOTOR)) {
     return 10;
   }
-
-  if (hasLamp) {
+  if (
+    connectedLoads.some(
+      (l) =>
+        l.type === COMPONENT_TYPES.LAMP ||
+        l.type === COMPONENT_TYPES.INDICATOR
+    )
+  ) {
     return 20;
   }
-
-  if (hasLed) {
+  if (connectedLoads.some((l) => l.type === COMPONENT_TYPES.LED)) {
     return 100;
   }
 
@@ -1215,6 +1447,76 @@ function getLoadPower(
    ESTADOS DAS CARGAS
 ================================================== */
 
+/**
+ * Avalia se um componente está em sobrecarga com base
+ * na corrente, potência e tensão aplicadas vs limites nominais.
+ *
+ * Retorna { overloaded, reasons[], current, power, voltage }
+ */
+export function evaluateOverload(component, {
+  voltage = 0,
+  current = 0,
+  power = 0,
+} = {}) {
+  if (!component) {
+    return {
+      overloaded: false,
+      reasons: [],
+      current: 0,
+      power: 0,
+      voltage: 0,
+    };
+  }
+
+  const V = Math.max(Number(voltage) || 0, 0);
+  const I = Math.max(Number(current) || 0, 0);
+  const P = Math.max(Number(power) || 0, 0);
+
+  const maxCurrent = Number(component.maxCurrent);
+  const maxPower = Number(component.maxPower);
+  const maxVoltage = Number(component.maxVoltage);
+
+  const reasons = [];
+
+  if (
+    Number.isFinite(maxCurrent) &&
+    maxCurrent > 0 &&
+    I > maxCurrent
+  ) {
+    reasons.push(
+      `corrente ${I.toFixed(3)} A > limite ${maxCurrent} A`
+    );
+  }
+
+  if (
+    Number.isFinite(maxPower) &&
+    maxPower > 0 &&
+    P > maxPower
+  ) {
+    reasons.push(
+      `potência ${P.toFixed(2)} W > limite ${maxPower} W`
+    );
+  }
+
+  if (
+    Number.isFinite(maxVoltage) &&
+    maxVoltage > 0 &&
+    V > maxVoltage
+  ) {
+    reasons.push(
+      `tensão ${V.toFixed(2)} V > limite ${maxVoltage} V`
+    );
+  }
+
+  return {
+    overloaded: reasons.length > 0,
+    reasons,
+    current: I,
+    power: P,
+    voltage: V,
+  };
+}
+
 export function getLoadStates(circuit, energized = null) {
   const loads = getLoads(circuit);
   const states = {};
@@ -1241,6 +1543,9 @@ export function getLoadStates(circuit, energized = null) {
         load.type === COMPONENT_TYPES.MOTOR,
 
       power: 0,
+      current: 0,
+      overloaded: false,
+      overloadReasons: [],
     };
   });
 
@@ -1292,10 +1597,14 @@ export function getReactiveAnalysis(
 ) {
   const capacitor = getCapacitor(circuit);
   const inductor = getInductor(circuit);
+  const sourceMode = getSourceModeFromCircuit(circuit);
+  const frequency = getSourceFrequencyFromCircuit(circuit);
 
   const result = {
     capacitor: null,
     inductor: null,
+    sourceMode,
+    frequency,
   };
 
   const R = Math.max(
@@ -1317,6 +1626,50 @@ export function getReactiveAnalysis(
     Number(elapsedSeconds) || 0,
     0
   );
+
+  // AC: XC / XL em regime senoidal
+  if (sourceMode === "AC" && frequency > 0) {
+    const omega = 2 * Math.PI * frequency;
+
+    if (capacitor) {
+      const uF = Math.max(Number(capacitor.value) || 0, 0);
+      const C = uF * 1e-6;
+      const XC =
+        C > 0 && omega > 0 ? 1 / (omega * C) : null;
+      result.capacitor = {
+        value: uF,
+        unit: "µF",
+        mode: "AC",
+        frequency,
+        reactance: XC != null ? roundValue(XC, 3) : null,
+        impedanceLabel: "XC",
+        voltage: roundValue(V, 2),
+        current:
+          XC > 0 ? roundValue(V / XC, 4) : 0,
+        note: "Capacitor em AC: XC = 1/(2πfC)",
+      };
+    }
+
+    if (inductor) {
+      const mH = Math.max(Number(inductor.value) || 0, 0);
+      const L = mH * 1e-3;
+      const XL = L > 0 ? omega * L : null;
+      result.inductor = {
+        value: mH,
+        unit: "mH",
+        mode: "AC",
+        frequency,
+        reactance: XL != null ? roundValue(XL, 3) : null,
+        impedanceLabel: "XL",
+        voltage: roundValue(V, 2),
+        current:
+          XL > 0 ? roundValue(V / XL, 4) : 0,
+        note: "Indutor em AC: XL = 2πfL",
+      };
+    }
+
+    return result;
+  }
 
   /* ==========================================
      CAPACITOR
@@ -1535,6 +1888,16 @@ export function simulateCircuit(circuit) {
 
       energizedLoadIds: [],
 
+      protections: {
+        trips: [],
+        thermalPending: [],
+        totalCurrent: 0,
+        maxMotorCurrent: 0,
+        voltage: 0,
+      },
+
+      coils: {},
+
       reactive: getReactiveAnalysis(
         circuit,
         0,
@@ -1550,6 +1913,14 @@ export function simulateCircuit(circuit) {
   ========================================== */
 
   const voltage = Number(source?.value) || 0;
+  const sourceMode =
+    String(source?.mode || "DC").toUpperCase() === "AC"
+      ? "AC"
+      : "DC";
+  const sourceFrequency =
+    sourceMode === "AC"
+      ? Math.max(Number(source?.frequency) || 60, 1)
+      : 0;
 
   /* ==========================================
      ESTADOS DAS CARGAS (pelo caminho elétrico)
@@ -1597,6 +1968,16 @@ export function simulateCircuit(circuit) {
 
       energizedLoadIds: [],
 
+      protections: {
+        trips: [],
+        thermalPending: [],
+        totalCurrent: 0,
+        maxMotorCurrent: 0,
+        voltage: roundValue(voltage, 2),
+      },
+
+      coils: getCoilStates(circuit),
+
       reactive: getReactiveAnalysis(
         circuit,
         resistance,
@@ -1637,32 +2018,120 @@ export function simulateCircuit(circuit) {
       : 0;
 
   /* ==========================================
-     POTÊNCIA DAS CARGAS
+     DIVISÃO DE CORRENTE ENTRE CARGAS
+     (paralelo aproximado com R individuais)
   ========================================== */
 
-  Object.values(loadStates).forEach((loadState) => {
-    if (!loadState.energized) {
-      loadState.power = 0;
-      loadState.running = false;
+  const defaultRByType = {
+    [COMPONENT_TYPES.MOTOR]: 10,
+    [COMPONENT_TYPES.LAMP]: 20,
+    [COMPONENT_TYPES.INDICATOR]: 20,
+    [COMPONENT_TYPES.LED]: 100,
+  };
 
-      return;
-    }
+  const energizedLoads = Object.values(loadStates).filter(
+    (s) => s.energized
+  );
 
+  // Condutâncias para rateio da corrente total
+  let totalConductance = 0;
+  const loadMeta = energizedLoads.map((loadState) => {
     const component = circuit.components?.find(
       (item) => item.id === loadState.id
     );
+    let R = Number(component?.resistance);
+    if (!Number.isFinite(R) || R <= 0) {
+      R = defaultRByType[component?.type] || 20;
+    }
+    const G = 1 / R;
+    totalConductance += G;
+    return { loadState, component, R, G };
+  });
 
-    loadState.power = getLoadPower(
-      component,
-      power,
-      current,
-      voltage
+  loadMeta.forEach(({ loadState, component, R, G }) => {
+    // Fração da corrente total neste ramo
+    const share =
+      totalConductance > 0 ? G / totalConductance : 0;
+    const loadCurrent =
+      totalConductance > 0 ? current * share : current;
+
+    // Tensão no ramo (aproximação: mesma V nas cargas em paralelo)
+    const branchVoltage =
+      Number.isFinite(R) && R > 0
+        ? loadCurrent * R
+        : voltage;
+
+    const loadPower = roundValue(
+      branchVoltage * loadCurrent,
+      2
     );
 
+    loadState.current = roundValue(loadCurrent, 4);
+    loadState.power = loadPower;
     loadState.running =
-      component?.type === COMPONENT_TYPES.MOTOR &&
-      loadState.energized;
+      component?.type === COMPONENT_TYPES.MOTOR;
+
+    const overload = evaluateOverload(component, {
+      voltage: branchVoltage,
+      current: loadCurrent,
+      power: loadPower,
+    });
+
+    loadState.overloaded = overload.overloaded;
+    loadState.overloadReasons = overload.reasons;
   });
+
+  // Cargas não energizadas
+  Object.values(loadStates).forEach((loadState) => {
+    if (loadState.energized) return;
+    loadState.power = 0;
+    loadState.current = 0;
+    loadState.running = false;
+    loadState.overloaded = false;
+    loadState.overloadReasons = [];
+  });
+
+  // Sobrecarga no resistor (série / equivalente)
+  const resistor = getResistor(circuit);
+  if (resistor && voltage > 0 && current > 0) {
+    const resistorPower =
+      Number.isFinite(Number(resistor.value)) &&
+      Number(resistor.value) > 0
+        ? roundValue(
+            current * current * Number(resistor.value),
+            2
+          )
+        : roundValue(power, 2);
+
+    const resistorOverload = evaluateOverload(resistor, {
+      voltage,
+      current,
+      power: resistorPower,
+    });
+
+    loadStates[`__resistor__${resistor.id}`] = {
+      id: resistor.id,
+      type: COMPONENT_TYPES.RESISTOR,
+      energized: true,
+      running: false,
+      power: resistorPower,
+      current: roundValue(current, 4),
+      overloaded: resistorOverload.overloaded,
+      overloadReasons: resistorOverload.reasons,
+    };
+  }
+
+  /* ==========================================
+     PROTEÇÕES: FUSÍVEL / RELÉ TÉRMICO / DISJUNTOR
+  ========================================== */
+
+  const protections = evaluateProtections(circuit, {
+    totalCurrent: current,
+    loadStates,
+    voltage,
+  });
+
+  const coilStates = getCoilStates(circuit);
 
   /* ==========================================
      IDS ENERGIZADOS
@@ -1691,9 +2160,23 @@ export function simulateCircuit(circuit) {
 
     power: roundValue(power, 2),
 
+    sourceMode,
+
+    frequency: sourceFrequency,
+
+    // Em AC, V e I são valores eficazes (RMS) na aproximação educativa
+    voltageLabel:
+      sourceMode === "AC" ? "Vrms" : "V",
+    currentLabel:
+      sourceMode === "AC" ? "Irms" : "A",
+
     loads: loadStates,
 
     energizedLoadIds,
+
+    protections,
+
+    coils: coilStates,
 
     reactive: getReactiveAnalysis(
       circuit,
@@ -1702,5 +2185,184 @@ export function simulateCircuit(circuit) {
       voltage,
       current
     ),
+  };
+}
+
+/**
+ * Estado das bobinas (contatores e temporizadores).
+ */
+export function getCoilStates(circuit) {
+  const components = Array.isArray(circuit?.components)
+    ? circuit.components
+    : [];
+
+  const source = components.find(
+    (c) => c?.type === COMPONENT_TYPES.SOURCE
+  );
+
+  const result = {};
+
+  if (!source || !isSourceEnabled(source)) {
+    return result;
+  }
+
+  const graph = buildBaseGraphWithoutContactorContacts(circuit);
+  const sourcePos = createNodeKey(source.id, "positive");
+  const sourceNeg = createNodeKey(source.id, "negative");
+
+  components.forEach((comp) => {
+    if (
+      comp?.type !== COMPONENT_TYPES.CONTACTOR &&
+      comp?.type !== COMPONENT_TYPES.TIMER_ON_DELAY
+    ) {
+      return;
+    }
+
+    const coilOn = isCoilEnergized(
+      graph,
+      comp,
+      sourcePos,
+      sourceNeg
+    );
+
+    result[comp.id] = {
+      id: comp.id,
+      type: comp.type,
+      coilEnergized: coilOn,
+      // Contator: contatos seguem a bobina
+      contactsClosed:
+        comp.type === COMPONENT_TYPES.CONTACTOR
+          ? coilOn
+          : Boolean(comp.value) && coilOn,
+      // Temporizador aguardando atraso
+      timerPending:
+        comp.type === COMPONENT_TYPES.TIMER_ON_DELAY &&
+        coilOn &&
+        !comp.value,
+    };
+  });
+
+  return result;
+}
+
+/**
+ * Avalia dispositivos de proteção e indica quais devem
+ * desarmar / queimar com base na corrente medida.
+ *
+ * - Fusível (FUSE_ISOLATOR): queima imediatamente se I_total > maxCurrent
+ * - Disjuntor (BREAKER): desarma imediatamente se I_total > maxCurrent
+ * - Relé térmico (THERMAL_RELAY): entra em aquecimento se corrente do
+ *   motor > maxCurrent; o desarme com atraso é aplicado na UI
+ *   (campo thermalPending + delaySeconds)
+ */
+export function evaluateProtections(
+  circuit,
+  { totalCurrent = 0, loadStates = {}, voltage = 0 } = {}
+) {
+  const components = Array.isArray(circuit?.components)
+    ? circuit.components
+    : [];
+
+  const trips = [];
+  const thermalPending = [];
+  const I = Math.max(Number(totalCurrent) || 0, 0);
+
+  // Correntes de motores energizados
+  const motorCurrents = Object.values(loadStates)
+    .filter(
+      (s) =>
+        s?.energized &&
+        s?.type === COMPONENT_TYPES.MOTOR
+    )
+    .map((s) => ({
+      id: s.id,
+      current: Math.max(Number(s.current) || 0, 0),
+    }));
+
+  const maxMotorCurrent =
+    motorCurrents.length > 0
+      ? Math.max(...motorCurrents.map((m) => m.current))
+      : 0;
+
+  components.forEach((comp) => {
+    if (!comp || !isComponentEnabled(comp)) return;
+    // Já desarmado / queimado
+    if (comp.tripped === true || comp.burned === true) return;
+    if (!isSwitchClosed(comp)) return;
+
+    const limit = Number(comp.maxCurrent);
+
+    if (comp.type === COMPONENT_TYPES.FUSE_ISOLATOR) {
+      const tripLimit =
+        Number.isFinite(limit) && limit > 0 ? limit : 6;
+      if (I > tripLimit) {
+        trips.push({
+          id: comp.id,
+          type: comp.type,
+          action: "burn",
+          reason: `Fusível queimou: ${I.toFixed(3)} A > ${tripLimit} A`,
+          current: I,
+          limit: tripLimit,
+        });
+      }
+    }
+
+    if (comp.type === COMPONENT_TYPES.BREAKER) {
+      const tripLimit =
+        Number.isFinite(limit) && limit > 0 ? limit : 10;
+      if (I > tripLimit) {
+        trips.push({
+          id: comp.id,
+          type: comp.type,
+          action: "trip",
+          reason: `Disjuntor desarmou: ${I.toFixed(3)} A > ${tripLimit} A`,
+          current: I,
+          limit: tripLimit,
+        });
+      }
+    }
+
+    if (comp.type === COMPONENT_TYPES.THERMAL_RELAY) {
+      const tripLimit =
+        Number.isFinite(limit) && limit > 0 ? limit : 1.5;
+      // Prioriza corrente do motor; se não houver motor, usa corrente total
+      const senseCurrent =
+        maxMotorCurrent > 0 ? maxMotorCurrent : I;
+
+      // Atraso térmico configurável (padrão 3 s)
+      let delaySeconds = Number(comp.thermalDelay);
+      if (!Number.isFinite(delaySeconds) || delaySeconds < 0) {
+        delaySeconds = 3;
+      }
+
+      if (senseCurrent > tripLimit) {
+        // Quanto maior a sobrecarga, mais rápido desarma (mín. 0,5 s)
+        const overloadRatio = senseCurrent / tripLimit;
+        const effectiveDelay = Math.max(
+          0.5,
+          delaySeconds / Math.max(overloadRatio, 1)
+        );
+
+        thermalPending.push({
+          id: comp.id,
+          type: comp.type,
+          action: "thermal_heat",
+          reason: `Relé térmico aquecendo: ${senseCurrent.toFixed(3)} A > ${tripLimit} A`,
+          current: senseCurrent,
+          limit: tripLimit,
+          delaySeconds: effectiveDelay,
+          baseDelaySeconds: delaySeconds,
+          overloadRatio: roundValue(overloadRatio, 2),
+        });
+      }
+    }
+  });
+
+  return {
+    trips,
+    thermalPending,
+    totalCurrent: I,
+    maxMotorCurrent,
+    voltage: Number(voltage) || 0,
   };
 }

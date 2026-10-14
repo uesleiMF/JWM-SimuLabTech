@@ -29,6 +29,8 @@ import {
   FolderOpen,
   ZoomIn,
   ZoomOut,
+  Volume2,
+  VolumeX,
   ClipboardCheck,
   X,
   LayoutGrid,
@@ -69,6 +71,18 @@ import {
 
 import { createInitialCircuit } from "./hooks/useLaboratory";
 
+import {
+  setSoundMuted,
+  isSoundMuted,
+  playClick,
+  playContactor,
+  playFuseBlow,
+  playTrip,
+  playOverloadBeep,
+  startMotorSound,
+  stopMotorSound,
+} from "../../simulator/sounds";
+
 
 /* ==================================================
    MAPA DE ÍCONES
@@ -89,6 +103,7 @@ const iconMap = {
   [COMPONENT_TYPES.BREAKER]: CircleAlert,
   [COMPONENT_TYPES.FUSE_ISOLATOR]: CircleAlert,
   [COMPONENT_TYPES.THERMAL_RELAY]: Settings2,
+  [COMPONENT_TYPES.TIMER_ON_DELAY]: History,
   [COMPONENT_TYPES.INDICATOR]: Lightbulb,
 };
 
@@ -107,6 +122,14 @@ export default function Laboratory() {
 
   const [circuit, setCircuit] =
     useState(createInitialCircuit);
+
+  const [soundOn, setSoundOn] = useState(true);
+  const prevSoundRef = useRef({
+    components: {},
+    motorsOn: false,
+    coils: {},
+    overloaded: {},
+  });
 
 
   /* ==================================================
@@ -255,6 +278,406 @@ export default function Laboratory() {
     [circuit]
   );
 
+  /* ==================================================
+     SONS (motor, botoeiras, contator, proteções)
+  ================================================== */
+
+  useEffect(() => {
+    setSoundMuted(!soundOn);
+    if (!soundOn) {
+      stopMotorSound();
+    }
+  }, [soundOn]);
+
+  useEffect(() => {
+    if (!soundOn) return;
+
+    const prev = prevSoundRef.current;
+    const components = circuit.components || [];
+    const nextMap = {};
+
+    components.forEach((comp) => {
+      nextMap[comp.id] = {
+        type: comp.type,
+        value: Boolean(comp.value),
+        tripped: Boolean(comp.tripped),
+        burned: Boolean(comp.burned),
+      };
+
+      const before = prev.components[comp.id];
+      if (!before) return;
+
+      // Interruptor / botoeiras
+      if (
+        [
+          COMPONENT_TYPES.SWITCH,
+          COMPONENT_TYPES.PUSH_BUTTON_NO,
+          COMPONENT_TYPES.PUSH_BUTTON_NC,
+        ].includes(comp.type) &&
+        before.value !== Boolean(comp.value)
+      ) {
+        if (comp.type === COMPONENT_TYPES.PUSH_BUTTON_NO) {
+          playClick(comp.value ? "hard" : "release");
+        } else if (
+          comp.type === COMPONENT_TYPES.PUSH_BUTTON_NC
+        ) {
+          playClick(comp.value ? "release" : "hard");
+        } else {
+          playClick(comp.value ? "hard" : "soft");
+        }
+      }
+
+      // Proteções
+      if (
+        [
+          COMPONENT_TYPES.FUSE_ISOLATOR,
+          COMPONENT_TYPES.THERMAL_RELAY,
+          COMPONENT_TYPES.BREAKER,
+        ].includes(comp.type)
+      ) {
+        if (!before.burned && comp.burned) {
+          playFuseBlow();
+        } else if (!before.tripped && comp.tripped) {
+          playTrip();
+        }
+      }
+    });
+
+    // Contator: bobina
+    const coils = simulation?.coils || {};
+    Object.keys(coils).forEach((id) => {
+      const now = Boolean(coils[id]?.coilEnergized);
+      const was = Boolean(prev.coils[id]);
+      if (now !== was) {
+        playContactor(now);
+      }
+    });
+
+    // Motor funcionando
+    const motorOn = (components || []).some((c) => {
+      if (c.type !== COMPONENT_TYPES.MOTOR) return false;
+      const load = simulation?.loads?.[c.id];
+      return load?.energized === true;
+    });
+
+    if (motorOn && !prev.motorsOn) {
+      startMotorSound();
+    } else if (!motorOn && prev.motorsOn) {
+      stopMotorSound();
+    } else if (motorOn) {
+      startMotorSound();
+    }
+
+    // Sobrecarga nova (bip leve, no máximo um por ciclo de mudança)
+    const overloadedNow = {};
+    Object.values(simulation?.loads || {}).forEach((load) => {
+      if (load?.overloaded) {
+        overloadedNow[load.id] = true;
+        if (!prev.overloaded[load.id]) {
+          playOverloadBeep();
+        }
+      }
+    });
+
+    prevSoundRef.current = {
+      components: nextMap,
+      motorsOn: motorOn,
+      coils: Object.fromEntries(
+        Object.entries(coils).map(([id, c]) => [
+          id,
+          Boolean(c?.coilEnergized),
+        ])
+      ),
+      overloaded: overloadedNow,
+    };
+  }, [circuit, simulation, soundOn]);
+
+  /* ==================================================
+     PROTEÇÕES INSTANTÂNEAS (fusível / disjuntor)
+  ================================================== */
+
+  useEffect(() => {
+    const trips = simulation?.protections?.trips;
+    if (!Array.isArray(trips) || trips.length === 0) {
+      return;
+    }
+
+    const needsApply = trips.some((trip) => {
+      const comp = circuit.components?.find(
+        (c) => c.id === trip.id
+      );
+      if (!comp) return false;
+      if (trip.action === "burn") {
+        return comp.burned !== true;
+      }
+      return comp.tripped !== true || comp.value !== false;
+    });
+
+    if (!needsApply) return;
+
+    setCircuit((current) => {
+      let changed = false;
+      const components = (current.components || []).map(
+        (comp) => {
+          const trip = trips.find((t) => t.id === comp.id);
+          if (!trip) return comp;
+
+          changed = true;
+          if (trip.action === "burn") {
+            return {
+              ...comp,
+              value: false,
+              burned: true,
+              tripped: true,
+            };
+          }
+          return {
+            ...comp,
+            value: false,
+            tripped: true,
+            burned: false,
+          };
+        }
+      );
+
+      if (!changed) return current;
+      return { ...current, components };
+    });
+
+    const messages = trips.map((t) => t.reason).join(" | ");
+    setMessage(`⚠ Proteção atuou: ${messages}`);
+  }, [simulation?.protections?.trips, circuit.components]);
+
+  /* ==================================================
+     ATRASO TÉRMICO DO RELÉ (aquecimento progressivo)
+  ================================================== */
+
+  const [thermalHeat, setThermalHeat] = useState({});
+  // thermalHeat[id] = { progress: 0..1, delaySeconds, current, limit }
+
+  useEffect(() => {
+    const pending = simulation?.protections?.thermalPending;
+    const pendingMap = new Map(
+      (Array.isArray(pending) ? pending : []).map((p) => [
+        p.id,
+        p,
+      ])
+    );
+
+    // Se não há nenhum em aquecimento e estado vazio, nada a fazer
+    if (pendingMap.size === 0) {
+      setThermalHeat((prev) =>
+        Object.keys(prev).length === 0 ? prev : {}
+      );
+      return undefined;
+    }
+
+    const TICK_MS = 100;
+    const intervalId = setInterval(() => {
+      setThermalHeat((prev) => {
+        const next = { ...prev };
+        const messages = [];
+
+        // Atualiza ou inicia aquecimento
+        pendingMap.forEach((p, id) => {
+          const prevEntry = next[id];
+          const delay = Math.max(
+            Number(p.delaySeconds) || 3,
+            0.5
+          );
+          const step = TICK_MS / 1000 / delay;
+
+          if (!prevEntry) {
+            next[id] = {
+              progress: step,
+              delaySeconds: delay,
+              current: p.current,
+              limit: p.limit,
+            };
+          } else {
+            next[id] = {
+              ...prevEntry,
+              progress: Math.min(
+                1,
+                prevEntry.progress + step
+              ),
+              delaySeconds: delay,
+              current: p.current,
+              limit: p.limit,
+            };
+          }
+
+          if (next[id].progress >= 1) {
+            messages.push(
+              `Relé térmico desarmou: ${Number(p.current).toFixed(3)} A > ${p.limit} A (após sobrecarga)`
+            );
+          }
+        });
+
+        // Remove ids que não estão mais em sobrecarga
+        Object.keys(next).forEach((id) => {
+          if (!pendingMap.has(id)) {
+            delete next[id];
+          }
+        });
+
+        // Dispara desarme quando progress >= 1
+        const toTrip = Object.entries(next).filter(
+          ([, v]) => v.progress >= 1
+        );
+
+        if (toTrip.length > 0) {
+          // Limpa progresso dos que vão desarmar
+          toTrip.forEach(([id]) => {
+            delete next[id];
+          });
+
+          setCircuit((current) => {
+            const components = (current.components || []).map(
+              (comp) => {
+                if (
+                  !toTrip.some(([id]) => id === comp.id)
+                ) {
+                  return comp;
+                }
+                if (comp.tripped || comp.burned) {
+                  return comp;
+                }
+                return {
+                  ...comp,
+                  value: false,
+                  tripped: true,
+                  burned: false,
+                };
+              }
+            );
+            return { ...current, components };
+          });
+
+          if (messages.length > 0) {
+            setMessage(`⚠ ${messages.join(" | ")}`);
+          }
+        }
+
+        return next;
+      });
+    }, TICK_MS);
+
+    return () => clearInterval(intervalId);
+  }, [simulation?.protections?.thermalPending]);
+
+  /* ==================================================
+     TEMPORIZADOR TON (atraso na energização)
+  ================================================== */
+
+  const [timerHeat, setTimerHeat] = useState({});
+
+  useEffect(() => {
+    const coils = simulation?.coils || {};
+    const pendingIds = Object.values(coils)
+      .filter((c) => c.timerPending)
+      .map((c) => c.id);
+
+    const coilOnIds = new Set(
+      Object.values(coils)
+        .filter(
+          (c) =>
+            c.type === COMPONENT_TYPES.TIMER_ON_DELAY &&
+            c.coilEnergized
+        )
+        .map((c) => c.id)
+    );
+
+    // Bobina desligada → reseta contato e progresso
+    const timersOff = (circuit.components || []).filter(
+      (c) =>
+        c.type === COMPONENT_TYPES.TIMER_ON_DELAY &&
+        c.value === true &&
+        !coilOnIds.has(c.id)
+    );
+
+    if (timersOff.length > 0) {
+      setCircuit((current) => ({
+        ...current,
+        components: (current.components || []).map((comp) =>
+          timersOff.some((t) => t.id === comp.id)
+            ? { ...comp, value: false }
+            : comp
+        ),
+      }));
+      setTimerHeat((prev) => {
+        const next = { ...prev };
+        timersOff.forEach((t) => {
+          delete next[t.id];
+        });
+        return next;
+      });
+    }
+
+    if (pendingIds.length === 0) {
+      setTimerHeat((prev) =>
+        Object.keys(prev).length === 0 ? prev : {}
+      );
+      return undefined;
+    }
+
+    const TICK_MS = 100;
+    const intervalId = setInterval(() => {
+      setTimerHeat((prev) => {
+        const next = { ...prev };
+        const toClose = [];
+
+        pendingIds.forEach((id) => {
+          const comp = circuit.components?.find(
+            (c) => c.id === id
+          );
+          let delay = Number(comp?.thermalDelay);
+          if (!Number.isFinite(delay) || delay < 0.5) {
+            delay = 3;
+          }
+          const step = TICK_MS / 1000 / delay;
+          const prevEntry = next[id];
+          const progress = Math.min(
+            1,
+            (prevEntry?.progress || 0) + step
+          );
+          next[id] = { progress, delaySeconds: delay };
+          if (progress >= 1) {
+            toClose.push(id);
+          }
+        });
+
+        Object.keys(next).forEach((id) => {
+          if (!pendingIds.includes(id)) {
+            delete next[id];
+          }
+        });
+
+        if (toClose.length > 0) {
+          toClose.forEach((id) => {
+            delete next[id];
+          });
+          setCircuit((current) => ({
+            ...current,
+            components: (current.components || []).map(
+              (comp) =>
+                toClose.includes(comp.id)
+                  ? { ...comp, value: true }
+                  : comp
+            ),
+          }));
+          setMessage(
+            "Temporizador TON: contato fechado após o atraso."
+          );
+        }
+
+        return next;
+      });
+    }, TICK_MS);
+
+    return () => clearInterval(intervalId);
+  }, [simulation?.coils, circuit.components]);
+
 
   /* ==================================================
      COMPONENTES PRINCIPAIS
@@ -355,6 +778,49 @@ export default function Laboratory() {
           Number(
             loadState?.power
           ) || 0,
+
+        overloaded:
+          loadState?.overloaded === true,
+
+        overloadReasons:
+          loadState?.overloadReasons || [],
+
+        current:
+          Number(loadState?.current) || 0,
+      };
+    }
+
+    /* ==================================================
+       RESISTOR (também pode entrar em sobrecarga)
+    ================================================== */
+
+    if (component.type === COMPONENT_TYPES.RESISTOR) {
+      const resistorState =
+        simulation.loads?.[`__resistor__${component.id}`];
+
+      return {
+        energized:
+          simulation.energized === true,
+
+        running: false,
+
+        power:
+          Number(resistorState?.power) ||
+          (simulation.energized
+            ? Number(simulation.power) || 0
+            : 0),
+
+        overloaded:
+          resistorState?.overloaded === true,
+
+        overloadReasons:
+          resistorState?.overloadReasons || [],
+
+        current:
+          Number(resistorState?.current) ||
+          (simulation.energized
+            ? Number(simulation.current) || 0
+            : 0),
       };
     }
 
@@ -372,31 +838,6 @@ export default function Laboratory() {
         energized:
           simulation.energized === true &&
           source?.enabled === true,
-
-        running: false,
-
-        power:
-          simulation.energized
-            ? Number(
-                simulation.power
-              ) || 0
-            : 0,
-      };
-    }
-
-
-    /* ==================================================
-       RESISTOR
-    ================================================== */
-
-    if (
-      component.type ===
-      COMPONENT_TYPES.RESISTOR
-    ) {
-
-      return {
-        energized:
-          simulation.energized === true,
 
         running: false,
 
@@ -2436,59 +2877,12 @@ export default function Laboratory() {
   const handleAddOrRemoveComponent = (
     catalogItem
   ) => {
-
-    const existing =
-      circuit.components.find(
-        (component) =>
-          component.type ===
-          catalogItem.id
-      );
-
-
-    /* ==================================================
-       REMOVER
-    ================================================== */
-
-    if (existing) {
-
-      updateCircuit((current) => {
-
-        const withoutConnections =
-          removeComponentConnections(
-            current,
-            existing.id
-          );
-
-
-        return removeComponent(
-          withoutConnections,
-          existing.id
-        );
-      });
-
-
-      if (
-        connectionStart?.componentId ===
-        existing.id
-      ) {
-
-        setConnectionStart(null);
-        setMousePosition(null);
-      }
-
-
-      setMessage(
-        `${catalogItem.name} removido do circuito.`
-      );
-
-
-      return;
-    }
-
-
-    /* ==================================================
-       ADICIONAR
-    ================================================== */
+    /*
+     * Sempre adiciona uma nova instância.
+     * Para remover, selecione o componente no quadro
+     * e use o botão Apagar do painel.
+     * Assim é possível ter 2 botoeiras, 2 contatores, etc.
+     */
 
     updateCircuit((current) =>
       addComponent(
@@ -2497,9 +2891,16 @@ export default function Laboratory() {
       )
     );
 
+    const count = (
+      circuit.components || []
+    ).filter(
+      (c) => c.type === catalogItem.id
+    ).length;
 
     setMessage(
-      `${catalogItem.name} adicionado ao circuito.`
+      count > 0
+        ? `${catalogItem.name} adicionado (${count + 1} no quadro).`
+        : `${catalogItem.name} adicionado ao circuito.`
     );
   };
 
@@ -3562,6 +3963,35 @@ export default function Laboratory() {
             <ZoomIn size={16} />
           </button>
 
+          <button
+            type="button"
+            className={`zoom-button ${soundOn ? "active" : ""}`}
+            onClick={() => {
+              setSoundOn((v) => {
+                const next = !v;
+                setSoundMuted(!next);
+                if (!next) stopMotorSound();
+                setMessage(
+                  next
+                    ? "Sons do laboratório ativados."
+                    : "Sons do laboratório desativados."
+                );
+                return next;
+              });
+            }}
+            title={
+              soundOn
+                ? "Desativar sons"
+                : "Ativar sons (motor, botoeiras, contator…)"
+            }
+          >
+            {soundOn ? (
+              <Volume2 size={16} />
+            ) : (
+              <VolumeX size={16} />
+            )}
+          </button>
+
         </div>
 
       </section>
@@ -3720,6 +4150,138 @@ export default function Laboratory() {
 
               )}
 
+              {/* Fonte AC / DC */}
+              {selectedComponent.type ===
+                COMPONENT_TYPES.SOURCE && (
+
+                <div style={{ marginTop: 10 }}>
+                  <label>
+                    <span>Tipo de tensão</span>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 8,
+                        marginTop: 6,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className={`delete-component-button ${
+                          String(
+                            selectedComponent.mode || "DC"
+                          ).toUpperCase() !== "AC"
+                            ? "on"
+                            : ""
+                        }`}
+                        style={{
+                          flex: 1,
+                          opacity:
+                            String(
+                              selectedComponent.mode || "DC"
+                            ).toUpperCase() !== "AC"
+                              ? 1
+                              : 0.7,
+                        }}
+                        onClick={() => {
+                          updateCircuit((current) =>
+                            updateComponent(
+                              current,
+                              selectedComponent.id,
+                              {
+                                mode: "DC",
+                                name: "Fonte DC",
+                              }
+                            )
+                          );
+                          setMessage(
+                            "Fonte configurada em DC (contínua)."
+                          );
+                        }}
+                      >
+                        DC
+                      </button>
+                      <button
+                        type="button"
+                        className="delete-component-button"
+                        style={{
+                          flex: 1,
+                          opacity:
+                            String(
+                              selectedComponent.mode || "DC"
+                            ).toUpperCase() === "AC"
+                              ? 1
+                              : 0.7,
+                        }}
+                        onClick={() => {
+                          updateCircuit((current) =>
+                            updateComponent(
+                              current,
+                              selectedComponent.id,
+                              {
+                                mode: "AC",
+                                name: "Fonte AC",
+                                frequency:
+                                  selectedComponent.frequency ??
+                                  60,
+                              }
+                            )
+                          );
+                          setMessage(
+                            "Fonte configurada em AC (alternada)."
+                          );
+                        }}
+                      >
+                        AC
+                      </button>
+                    </div>
+                  </label>
+
+                  {String(
+                    selectedComponent.mode || "DC"
+                  ).toUpperCase() === "AC" && (
+                    <label style={{ marginTop: 10, display: "block" }}>
+                      <span>Frequência (Hz)</span>
+                      <div className="input-with-unit">
+                        <input
+                          type="number"
+                          min="1"
+                          step="1"
+                          value={
+                            selectedComponent.frequency ?? 60
+                          }
+                          onChange={(event) => {
+                            const v = Number(event.target.value);
+                            updateCircuit((current) =>
+                              updateComponent(
+                                current,
+                                selectedComponent.id,
+                                {
+                                  frequency:
+                                    Number.isFinite(v) && v > 0
+                                      ? v
+                                      : 60,
+                                }
+                              )
+                            );
+                          }}
+                        />
+                        <span>Hz</span>
+                      </div>
+                      <small
+                        style={{
+                          display: "block",
+                          marginTop: 4,
+                          opacity: 0.75,
+                        }}
+                      >
+                        Tensão informada = valor eficaz (RMS)
+                      </small>
+                    </label>
+                  )}
+                </div>
+
+              )}
+
 
               {typeof selectedComponent.value ===
                 "boolean" &&
@@ -3752,6 +4314,359 @@ export default function Laboratory() {
 
               )}
 
+              {/* Proteções: rearmar / trocar fusível */}
+              {[
+                COMPONENT_TYPES.FUSE_ISOLATOR,
+                COMPONENT_TYPES.THERMAL_RELAY,
+                COMPONENT_TYPES.BREAKER,
+              ].includes(selectedComponent.type) && (
+
+                <div style={{ marginTop: 10 }}>
+                  <label>
+                    <span>Corrente de atuação (A)</span>
+                    <div className="input-with-unit">
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="any"
+                        value={
+                          selectedComponent.maxCurrent ?? ""
+                        }
+                        onChange={(event) => {
+                          const v = Number(event.target.value);
+                          updateCircuit((current) =>
+                            updateComponent(
+                              current,
+                              selectedComponent.id,
+                              {
+                                maxCurrent:
+                                  Number.isFinite(v) && v > 0
+                                    ? v
+                                    : undefined,
+                              }
+                            )
+                          );
+                        }}
+                      />
+                      <span>A</span>
+                    </div>
+                  </label>
+
+                  {selectedComponent.type ===
+                    COMPONENT_TYPES.THERMAL_RELAY && (
+                    <label style={{ marginTop: 8, display: "block" }}>
+                      <span>Atraso térmico (s)</span>
+                      <div className="input-with-unit">
+                        <input
+                          type="number"
+                          min="0.5"
+                          step="0.5"
+                          value={
+                            selectedComponent.thermalDelay ?? 3
+                          }
+                          onChange={(event) => {
+                            const v = Number(
+                              event.target.value
+                            );
+                            updateCircuit((current) =>
+                              updateComponent(
+                                current,
+                                selectedComponent.id,
+                                {
+                                  thermalDelay:
+                                    Number.isFinite(v) &&
+                                    v >= 0.5
+                                      ? v
+                                      : 3,
+                                }
+                              )
+                            );
+                          }}
+                        />
+                        <span>s</span>
+                      </div>
+                    </label>
+                  )}
+
+                  {selectedComponent.type ===
+                    COMPONENT_TYPES.THERMAL_RELAY &&
+                    thermalHeat[selectedComponent.id] && (
+                    <p
+                      style={{
+                        marginTop: 8,
+                        fontSize: 12,
+                        color: "#c2410c",
+                        fontWeight: 600,
+                      }}
+                    >
+                      Aquecendo:{" "}
+                      {Math.round(
+                        (thermalHeat[selectedComponent.id]
+                          ?.progress || 0) * 100
+                      )}
+                      % — desarma em breve
+                    </p>
+                  )}
+
+                  {(selectedComponent.tripped ||
+                    selectedComponent.burned) && (
+                    <button
+                      type="button"
+                      className="delete-component-button"
+                      style={{ marginTop: 10 }}
+                      onClick={() => {
+                        updateCircuit((current) =>
+                          updateComponent(
+                            current,
+                            selectedComponent.id,
+                            {
+                              value: true,
+                              tripped: false,
+                              burned: false,
+                            }
+                          )
+                        );
+                        setThermalHeat((prev) => {
+                          const next = { ...prev };
+                          delete next[selectedComponent.id];
+                          return next;
+                        });
+                        setMessage(
+                          selectedComponent.type ===
+                            COMPONENT_TYPES.FUSE_ISOLATOR
+                            ? "Fusível substituído e circuito rearmado."
+                            : "Proteção rearmada."
+                        );
+                      }}
+                    >
+                      {selectedComponent.type ===
+                      COMPONENT_TYPES.FUSE_ISOLATOR
+                        ? "Trocar fusível / Rearmar"
+                        : "Rearmar proteção"}
+                    </button>
+                  )}
+                </div>
+
+              )}
+
+              {/* Valores atuais + limites nominais (sobrecarga) */}
+              {[
+                COMPONENT_TYPES.LAMP,
+                COMPONENT_TYPES.LED,
+                COMPONENT_TYPES.MOTOR,
+                COMPONENT_TYPES.INDICATOR,
+                COMPONENT_TYPES.RESISTOR,
+              ].includes(selectedComponent.type) && (
+
+                <div className="limits-grid">
+
+                  {/* Valores reais do circuito (só leitura) */}
+                  {selectedComponent.type !==
+                    COMPONENT_TYPES.RESISTOR && (
+                    <>
+                      <label>
+                        <span>Tensão atual (V)</span>
+                        <input
+                          type="text"
+                          readOnly
+                          value={
+                            simulation.loads?.[
+                              selectedComponent.id
+                            ]?.energized
+                              ? `${simulation.voltage ?? 0} V`
+                              : "0 V (desligado)"
+                          }
+                          title="Vem da fonte — altere a Fonte para mudar"
+                        />
+                      </label>
+                      <label>
+                        <span>Corrente atual (A)</span>
+                        <input
+                          type="text"
+                          readOnly
+                          value={(() => {
+                            const load =
+                              simulation.loads?.[
+                                selectedComponent.id
+                              ];
+                            if (!load?.energized) {
+                              return "0 A (desligado)";
+                            }
+                            const I =
+                              load.current ??
+                              (Number(
+                                selectedComponent.resistance
+                              ) > 0
+                                ? simulation.voltage /
+                                  selectedComponent.resistance
+                                : simulation.current);
+                            return `${Number(I).toFixed(3)} A`;
+                          })()}
+                          title="I ≈ V / R — altere a Resistência ou a Fonte"
+                        />
+                      </label>
+                    </>
+                  )}
+
+                  {(selectedComponent.type !==
+                    COMPONENT_TYPES.RESISTOR ||
+                    selectedComponent.resistance !=
+                      null) && (
+                    <label>
+                      <span>Resistência (Ω)</span>
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="any"
+                        value={
+                          selectedComponent.resistance ??
+                          ""
+                        }
+                        placeholder="auto"
+                        onChange={(event) => {
+                          const raw = event.target.value;
+                          if (raw === "" || raw === "-") {
+                            return;
+                          }
+                          const v = Number(raw);
+                          if (
+                            !Number.isFinite(v) ||
+                            v <= 0
+                          ) {
+                            return;
+                          }
+                          updateCircuit((current) =>
+                            updateComponent(
+                              current,
+                              selectedComponent.id,
+                              { resistance: v }
+                            )
+                          );
+                        }}
+                      />
+                    </label>
+                  )}
+
+                  <label>
+                    <span>I máx (A) — limite</span>
+                    <input
+                      type="number"
+                      min="0.001"
+                      step="any"
+                      value={
+                        selectedComponent.maxCurrent ??
+                        ""
+                      }
+                      placeholder="—"
+                      onChange={(event) => {
+                        const raw = event.target.value;
+                        if (raw === "" || raw === "-") {
+                          return;
+                        }
+                        const v = Number(raw);
+                        if (
+                          !Number.isFinite(v) ||
+                          v <= 0
+                        ) {
+                          return;
+                        }
+                        updateCircuit((current) =>
+                          updateComponent(
+                            current,
+                            selectedComponent.id,
+                            { maxCurrent: v }
+                          )
+                        );
+                      }}
+                    />
+                  </label>
+
+                  <label>
+                    <span>P máx (W) — limite</span>
+                    <input
+                      type="number"
+                      min="0.001"
+                      step="any"
+                      value={
+                        selectedComponent.maxPower ?? ""
+                      }
+                      placeholder="—"
+                      onChange={(event) => {
+                        const raw = event.target.value;
+                        if (raw === "" || raw === "-") {
+                          return;
+                        }
+                        const v = Number(raw);
+                        if (
+                          !Number.isFinite(v) ||
+                          v <= 0
+                        ) {
+                          return;
+                        }
+                        updateCircuit((current) =>
+                          updateComponent(
+                            current,
+                            selectedComponent.id,
+                            { maxPower: v }
+                          )
+                        );
+                      }}
+                    />
+                  </label>
+
+                  <label>
+                    <span>V máx (V) — limite</span>
+                    <input
+                      type="number"
+                      min="0.001"
+                      step="any"
+                      value={
+                        selectedComponent.maxVoltage ??
+                        ""
+                      }
+                      placeholder="—"
+                      onChange={(event) => {
+                        const raw = event.target.value;
+                        if (raw === "" || raw === "-") {
+                          return;
+                        }
+                        const v = Number(raw);
+                        if (
+                          !Number.isFinite(v) ||
+                          v <= 0
+                        ) {
+                          return;
+                        }
+                        updateCircuit((current) =>
+                          updateComponent(
+                            current,
+                            selectedComponent.id,
+                            { maxVoltage: v }
+                          )
+                        );
+                      }}
+                    />
+                  </label>
+
+                  <small
+                    style={{
+                      gridColumn: "1 / -1",
+                      opacity: 0.8,
+                      lineHeight: 1.35,
+                      marginTop: 4,
+                    }}
+                  >
+                    A tensão vem da <strong>Fonte</strong>.
+                    A corrente é I ≈ V / R — mude a{" "}
+                    <strong>Resistência</strong> do motor
+                    ou a tensão da fonte. I/P/V máx são só
+                    limites de sobrecarga.
+                  </small>
+
+                </div>
+
+              )}
+
             </div>
 
           )}
@@ -3773,12 +4688,13 @@ export default function Laboratory() {
                   ] || Zap;
 
 
-                const exists =
-                  circuit.components.some(
-                    (component) =>
-                      component.type ===
-                      catalogItem.id
-                  );
+                const count = (
+                  circuit.components || []
+                ).filter(
+                  (component) =>
+                    component.type ===
+                    catalogItem.id
+                ).length;
 
 
                 return (
@@ -3788,10 +4704,11 @@ export default function Laboratory() {
                       catalogItem.id
                     }
                     className={`component-item ${
-                      exists
-                        ? "selected"
+                      count > 0
+                        ? "has-instances"
                         : ""
                     }`}
+                    title="Clique para adicionar outro no quadro"
                     onClick={() =>
                       handleAddOrRemoveComponent(
                         catalogItem
@@ -3827,11 +4744,13 @@ export default function Laboratory() {
                     </span>
 
 
-                    {exists && (
-                      <CheckCircle2
-                        size={18}
-                        className="component-item-check"
-                      />
+                    {count > 0 && (
+                      <span
+                        className="component-item-count"
+                        title={`${count} no quadro — clique para adicionar mais`}
+                      >
+                        {count}
+                      </span>
                     )}
 
                   </button>
@@ -4166,6 +5085,33 @@ export default function Laboratory() {
                     )
                   }
 
+                  overloaded={
+                    getComponentSimulationState(
+                      component
+                    ).overloaded === true
+                  }
+
+                  overloadReasons={
+                    getComponentSimulationState(
+                      component
+                    ).overloadReasons || []
+                  }
+
+                  thermalProgress={
+                    thermalHeat[component.id]
+                      ?.progress || 0
+                  }
+
+                  coilEnergized={
+                    simulation.coils?.[component.id]
+                      ?.coilEnergized === true
+                  }
+
+                  timerProgress={
+                    timerHeat[component.id]
+                      ?.progress || 0
+                  }
+
                   connectionStart={
                     connectionStart
                   }
@@ -4316,6 +5262,119 @@ export default function Laboratory() {
 
             </div>
 
+            {/* Alertas de sobrecarga e proteções */}
+            {(() => {
+              const overloadedItems = Object.values(
+                simulation.loads || {}
+              ).filter((s) => s?.overloaded);
+
+              const trippedDevices = (
+                circuit.components || []
+              ).filter(
+                (c) =>
+                  c.tripped === true || c.burned === true
+              );
+
+              const heatingIds = Object.keys(
+                thermalHeat || {}
+              );
+
+              if (
+                overloadedItems.length === 0 &&
+                trippedDevices.length === 0 &&
+                heatingIds.length === 0
+              ) {
+                return null;
+              }
+
+              return (
+                <div className="overload-alert-banner" role="alert">
+                  {overloadedItems.length > 0 && (
+                    <>
+                      <strong>
+                        ⚠ Sobrecarga em{" "}
+                        {overloadedItems.length} componente
+                        {overloadedItems.length > 1
+                          ? "s"
+                          : ""}
+                      </strong>
+                      <ul>
+                        {overloadedItems.map((item) => {
+                          const comp = (
+                            circuit.components || []
+                          ).find((c) => c.id === item.id);
+                          const name =
+                            comp?.name ||
+                            item.type ||
+                            item.id;
+                          return (
+                            <li key={item.id}>
+                              <strong>{name}</strong>
+                              {": "}
+                              {(
+                                item.overloadReasons || []
+                              ).join("; ")}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </>
+                  )}
+
+                  {heatingIds.length > 0 && (
+                    <>
+                      <strong style={{ marginTop: 6 }}>
+                        🌡 Relé térmico aquecendo
+                      </strong>
+                      <ul>
+                        {heatingIds.map((id) => {
+                          const comp = (
+                            circuit.components || []
+                          ).find((c) => c.id === id);
+                          const heat = thermalHeat[id];
+                          return (
+                            <li key={id}>
+                              <strong>
+                                {comp?.name || id}
+                              </strong>
+                              {`: ${Math.round(
+                                (heat?.progress || 0) * 100
+                              )}% — ${Number(
+                                heat?.current || 0
+                              ).toFixed(2)} A > ${
+                                heat?.limit
+                              } A`}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </>
+                  )}
+
+                  {trippedDevices.length > 0 && (
+                    <>
+                      <strong style={{ marginTop: 6 }}>
+                        ⛔ Proteções atuadas
+                      </strong>
+                      <ul>
+                        {trippedDevices.map((comp) => (
+                          <li key={comp.id}>
+                            <strong>
+                              {comp.name || comp.type}
+                            </strong>
+                            {comp.burned
+                              ? ": fusível queimado"
+                              : ": desarmado"}
+                            {" — selecione o componente e rearme"}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
+
 
             <div className="measurements-grid">
 
@@ -4323,11 +5382,23 @@ export default function Laboratory() {
 
                 <span>
                   Tensão
+                  {simulation.sourceMode === "AC"
+                    ? " (RMS)"
+                    : " (DC)"}
                 </span>
 
                 <strong>
                   {simulation.voltage} V
+                  {simulation.sourceMode === "AC"
+                    ? " AC"
+                    : " DC"}
                 </strong>
+
+                {simulation.sourceMode === "AC" && (
+                  <small style={{ display: "block", opacity: 0.75 }}>
+                    {simulation.frequency || 60} Hz
+                  </small>
+                )}
 
               </div>
 
@@ -4336,6 +5407,9 @@ export default function Laboratory() {
 
                 <span>
                   Corrente
+                  {simulation.sourceMode === "AC"
+                    ? " (RMS)"
+                    : ""}
                 </span>
 
                 <strong>
@@ -4375,25 +5449,45 @@ export default function Laboratory() {
                   <div className="measurement-card">
                     <span>Capacitor</span>
                     <strong>
-                      {simulation.reactive.capacitor.valueuF ?? "—"} µF
+                      {simulation.reactive.capacitor.value ??
+                        simulation.reactive.capacitor.valueuF ??
+                        "—"}{" "}
+                      µF
                     </strong>
                   </div>
 
-                  <div className="measurement-card">
-                    <span>τ Capacitor</span>
-                    <strong>
-                      {simulation.reactive.capacitor.tauMs != null
-                        ? `${simulation.reactive.capacitor.tauMs} ms`
-                        : "R necessária"}
-                    </strong>
-                  </div>
+                  {simulation.reactive.capacitor.mode === "AC" ? (
+                    <div className="measurement-card">
+                      <span>XC (reatância)</span>
+                      <strong>
+                        {simulation.reactive.capacitor.reactance != null
+                          ? `${simulation.reactive.capacitor.reactance} Ω`
+                          : "—"}
+                      </strong>
+                    </div>
+                  ) : (
+                    <div className="measurement-card">
+                      <span>τ Capacitor</span>
+                      <strong>
+                        {simulation.reactive.capacitor.tauMs != null
+                          ? `${simulation.reactive.capacitor.tauMs} ms`
+                          : "R necessária"}
+                      </strong>
+                    </div>
+                  )}
 
                   <div className="measurement-card">
-                    <span>Energia do capacitor</span>
+                    <span>
+                      {simulation.reactive.capacitor.mode === "AC"
+                        ? "Corrente no C"
+                        : "Energia do capacitor"}
+                    </span>
                     <strong>
-                      {simulation.reactive.capacitor.energyJ != null
-                        ? `${simulation.reactive.capacitor.energyJ} J`
-                        : "—"}
+                      {simulation.reactive.capacitor.mode === "AC"
+                        ? `${simulation.reactive.capacitor.current ?? "—"} A`
+                        : simulation.reactive.capacitor.energyJ != null
+                          ? `${simulation.reactive.capacitor.energyJ} J`
+                          : "—"}
                     </strong>
                   </div>
 
@@ -4411,25 +5505,45 @@ export default function Laboratory() {
                   <div className="measurement-card">
                     <span>Indutor</span>
                     <strong>
-                      {simulation.reactive.inductor.valuemH ?? "—"} mH
+                      {simulation.reactive.inductor.value ??
+                        simulation.reactive.inductor.valuemH ??
+                        "—"}{" "}
+                      mH
                     </strong>
                   </div>
 
-                  <div className="measurement-card">
-                    <span>τ Indutor</span>
-                    <strong>
-                      {simulation.reactive.inductor.tauMs != null
-                        ? `${simulation.reactive.inductor.tauMs} ms`
-                        : "R necessária"}
-                    </strong>
-                  </div>
+                  {simulation.reactive.inductor.mode === "AC" ? (
+                    <div className="measurement-card">
+                      <span>XL (reatância)</span>
+                      <strong>
+                        {simulation.reactive.inductor.reactance != null
+                          ? `${simulation.reactive.inductor.reactance} Ω`
+                          : "—"}
+                      </strong>
+                    </div>
+                  ) : (
+                    <div className="measurement-card">
+                      <span>τ Indutor</span>
+                      <strong>
+                        {simulation.reactive.inductor.tauMs != null
+                          ? `${simulation.reactive.inductor.tauMs} ms`
+                          : "R necessária"}
+                      </strong>
+                    </div>
+                  )}
 
                   <div className="measurement-card">
-                    <span>Energia do indutor</span>
+                    <span>
+                      {simulation.reactive.inductor.mode === "AC"
+                        ? "Corrente no L"
+                        : "Energia do indutor"}
+                    </span>
                     <strong>
-                      {simulation.reactive.inductor.energyJ != null
-                        ? `${simulation.reactive.inductor.energyJ} J`
-                        : "—"}
+                      {simulation.reactive.inductor.mode === "AC"
+                        ? `${simulation.reactive.inductor.current ?? "—"} A`
+                        : simulation.reactive.inductor.energyJ != null
+                          ? `${simulation.reactive.inductor.energyJ} J`
+                          : "—"}
                     </strong>
                   </div>
 

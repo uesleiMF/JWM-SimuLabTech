@@ -416,14 +416,32 @@ export function addComponent(
   if (componentType === COMPONENT_TYPES.BREAKER) {
     defaultValue = true; // Disjuntor começa fechado
   }
+  if (componentType === COMPONENT_TYPES.FUSE_ISOLATOR) {
+    defaultValue = true; // Fusível começa íntegro (fechado)
+  }
+  if (componentType === COMPONENT_TYPES.THERMAL_RELAY) {
+    defaultValue = true; // Relé térmico começa armado (fechado)
+  }
+  if (componentType === COMPONENT_TYPES.TIMER_ON_DELAY) {
+    defaultValue = false; // Contato abre até o fim do atraso
+  }
   if (
     componentType === COMPONENT_TYPES.SWITCH ||
     componentType === COMPONENT_TYPES.PUSH_BUTTON_NO ||
-    componentType === COMPONENT_TYPES.CONTACTOR
+    componentType === COMPONENT_TYPES.CONTACTOR ||
+    componentType === COMPONENT_TYPES.TIMER_ON_DELAY
   ) {
     defaultValue = Boolean(defaultValue);
   }
 
+  const catalogItem =
+    typeof component.maxPower === "number" ||
+    typeof component.defaultResistance === "number"
+      ? component
+      : null;
+
+  // Importação dinâmica evitada: limites vêm do catálogo quando o aluno
+  // adiciona pela biblioteca (component já traz os campos do catalog).
   const newComponent = {
     id: generateId(componentType),
 
@@ -444,6 +462,67 @@ export function addComponent(
       y: defaultPosition.y + Math.floor(offset / 8),
     },
   };
+
+  // Fonte AC/DC
+  if (componentType === COMPONENT_TYPES.SOURCE) {
+    const mode =
+      component.mode ||
+      component.defaultMode ||
+      "DC";
+    newComponent.mode = mode === "AC" ? "AC" : "DC";
+    newComponent.name =
+      newComponent.mode === "AC" ? "Fonte AC" : "Fonte DC";
+    const freq = Number(
+      component.frequency ?? component.defaultFrequency ?? 60
+    );
+    newComponent.frequency =
+      Number.isFinite(freq) && freq > 0 ? freq : 60;
+  }
+
+  // Resistência e limites nominais (sobrecarga) para cargas e resistores
+  if (
+    component.defaultResistance != null ||
+    component.resistance != null
+  ) {
+    newComponent.resistance =
+      Number(component.resistance ?? component.defaultResistance) ||
+      undefined;
+  }
+
+  if (component.maxPower != null) {
+    newComponent.maxPower = Number(component.maxPower);
+  }
+  if (component.maxCurrent != null) {
+    newComponent.maxCurrent = Number(component.maxCurrent);
+  }
+  if (component.maxVoltage != null) {
+    newComponent.maxVoltage = Number(component.maxVoltage);
+  }
+
+  // Estado de proteção (fusível queimado / relé desarmado)
+  if (
+    componentType === COMPONENT_TYPES.FUSE_ISOLATOR ||
+    componentType === COMPONENT_TYPES.THERMAL_RELAY ||
+    componentType === COMPONENT_TYPES.BREAKER
+  ) {
+    newComponent.tripped = false;
+    newComponent.burned = false;
+  }
+
+  if (
+    (componentType === COMPONENT_TYPES.THERMAL_RELAY ||
+      componentType === COMPONENT_TYPES.TIMER_ON_DELAY) &&
+    component.thermalDelay != null
+  ) {
+    newComponent.thermalDelay =
+      Number(component.thermalDelay) || 3;
+  }
+  if (
+    componentType === COMPONENT_TYPES.TIMER_ON_DELAY &&
+    newComponent.thermalDelay == null
+  ) {
+    newComponent.thermalDelay = 3;
+  }
 
 
   /* ==================================================

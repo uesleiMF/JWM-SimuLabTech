@@ -428,6 +428,11 @@ export default function ComponentNode({
   energized = false,
   running = false,
   power = 0,
+  overloaded = false,
+  overloadReasons = [],
+  thermalProgress = 0,
+  coilEnergized = false,
+  timerProgress = 0,
   connectionStart = null,
   viewMode = "blocos",
   onSelect,
@@ -473,6 +478,28 @@ export default function ComponentNode({
     component.type === COMPONENT_TYPES.BREAKER ||
     component.type === COMPONENT_TYPES.FUSE_ISOLATOR ||
     component.type === COMPONENT_TYPES.THERMAL_RELAY;
+
+  const isProtection =
+    component.type === COMPONENT_TYPES.BREAKER ||
+    component.type === COMPONENT_TYPES.FUSE_ISOLATOR ||
+    component.type === COMPONENT_TYPES.THERMAL_RELAY;
+
+  const isBurned =
+    isProtection && component.burned === true;
+
+  const isTripped =
+    isProtection &&
+    (component.tripped === true || component.burned === true);
+
+  const isContactor =
+    component.type === COMPONENT_TYPES.CONTACTOR;
+
+  const isTimer =
+    component.type === COMPONENT_TYPES.TIMER_ON_DELAY;
+
+  const contactorOn = isContactor && coilEnergized;
+  const timerTiming = isTimer && timerProgress > 0 && !component.value;
+  const timerClosed = isTimer && component.value === true;
 
   /* ==================================================
      TERMINAIS
@@ -668,6 +695,22 @@ export default function ComponentNode({
 
     isSwitch && !switchOn ? "switch-off" : "",
 
+    overloaded ? "overloaded" : "",
+
+    isBurned ? "protection-burned" : "",
+
+    isTripped && !isBurned ? "protection-tripped" : "",
+
+    thermalProgress > 0 && !isTripped
+      ? "protection-heating"
+      : "",
+
+    contactorOn ? "contactor-on" : "",
+
+    timerTiming ? "timer-timing" : "",
+
+    timerClosed ? "timer-closed" : "",
+
     isSchematic ? "view-schematic" : "",
 
     is3d ? "view-3d" : "",
@@ -706,7 +749,7 @@ export default function ComponentNode({
         "--lamp-intensity": lampIntensity,
         "--component-power": numericPower,
 
-        ...(isLamp && energized
+        ...(isLamp && energized && !overloaded
           ? {
               borderColor: "#eab308",
               background:
@@ -716,7 +759,7 @@ export default function ComponentNode({
             }
           : {}),
 
-        ...(motorRunning
+        ...(motorRunning && !overloaded
           ? {
               borderColor: "#2563eb",
               background:
@@ -725,7 +768,22 @@ export default function ComponentNode({
                 "0 0 0 2px rgba(37, 99, 235, 0.2), 0 0 18px rgba(37, 99, 235, 0.4)",
             }
           : {}),
+
+        ...(overloaded
+          ? {
+              borderColor: "#dc2626",
+              background:
+                "linear-gradient(145deg, #fef2f2 0%, #fecaca 100%)",
+              boxShadow:
+                "0 0 0 3px rgba(220, 38, 38, 0.45), 0 0 24px rgba(239, 68, 68, 0.7)",
+            }
+          : {}),
       }}
+      title={
+        overloaded && overloadReasons?.length
+          ? `⚠ SOBRECARGA: ${overloadReasons.join("; ")}`
+          : component.name || component.type
+      }
       onMouseDown={handleMouseDown}
       onClick={(event) => {
         event.preventDefault();
@@ -819,6 +877,92 @@ export default function ComponentNode({
       )}
 
       {/* ================================================
+          AVISO DE SOBRECARGA
+      ================================================= */}
+
+      {overloaded && (
+        <span
+          className="overload-indicator"
+          aria-label="Componente em sobrecarga"
+          title={
+            overloadReasons?.length
+              ? overloadReasons.join("; ")
+              : "Sobrecarga detectada"
+          }
+        >
+          ⚠ SOBRECARGA
+        </span>
+      )}
+
+      {isBurned && (
+        <span
+          className="protection-status-indicator burned"
+          aria-label="Fusível queimado"
+        >
+          🔥 QUEIMADO
+        </span>
+      )}
+
+      {isTripped && !isBurned && (
+        <span
+          className="protection-status-indicator tripped"
+          aria-label="Proteção desarmada"
+        >
+          ⛔ DESARMADO
+        </span>
+      )}
+
+      {thermalProgress > 0 && !isTripped && (
+        <span
+          className="protection-status-indicator heating"
+          aria-label="Relé térmico aquecendo"
+          title={`Aquecimento: ${Math.round(thermalProgress * 100)}%`}
+        >
+          🌡 {Math.round(thermalProgress * 100)}%
+          <span
+            className="thermal-heat-bar"
+            style={{
+              width: `${Math.min(100, thermalProgress * 100)}%`,
+            }}
+          />
+        </span>
+      )}
+
+      {contactorOn && (
+        <span
+          className="protection-status-indicator contactor"
+          aria-label="Contator energizado"
+        >
+          ⚡ BOBINA ON
+        </span>
+      )}
+
+      {timerTiming && (
+        <span
+          className="protection-status-indicator heating"
+          aria-label="Temporizador contando"
+          title={`TON: ${Math.round(timerProgress * 100)}%`}
+        >
+          ⏱ {Math.round(timerProgress * 100)}%
+          <span
+            className="thermal-heat-bar"
+            style={{
+              width: `${Math.min(100, timerProgress * 100)}%`,
+            }}
+          />
+        </span>
+      )}
+
+      {timerClosed && (
+        <span
+          className="protection-status-indicator contactor"
+          aria-label="Temporizador fechado"
+        >
+          ⏱ FECHADO
+        </span>
+      )}
+
+      {/* ================================================
           ÍCONE / SÍMBOLO ESQUEMÁTICO
       ================================================= */}
 
@@ -890,14 +1034,25 @@ export default function ComponentNode({
 
       {!isSchematic && component.unit && (
         <small>
-          {component.value} {component.unit}
+          {component.type === COMPONENT_TYPES.SOURCE
+            ? `${component.value} ${component.unit} ${
+                String(component.mode || "DC").toUpperCase() === "AC"
+                  ? `AC ${(component.frequency ?? 60)} Hz`
+                  : "DC"
+              }`
+            : `${component.value} ${component.unit}`}
         </small>
       )}
 
       {isSchematic && component.unit && (
         <small className="schematic-value">
-          {component.value}
-          {component.unit}
+          {component.type === COMPONENT_TYPES.SOURCE
+            ? `${component.value}${component.unit} ${
+                String(component.mode || "DC").toUpperCase() === "AC"
+                  ? "AC"
+                  : "DC"
+              }`
+            : `${component.value}${component.unit}`}
         </small>
       )}
 

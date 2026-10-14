@@ -30,6 +30,10 @@ export const defaultCircuit = {
 
       unit: "V",
 
+      mode: "DC",
+
+      frequency: 60,
+
       enabled: true,
 
       position: {
@@ -68,6 +72,9 @@ export const defaultCircuit = {
 
       enabled: true,
 
+      maxPower: 5,
+      maxCurrent: 0.5,
+
       position: {
         x: 370,
         y: 190,
@@ -84,6 +91,11 @@ export const defaultCircuit = {
       value: false,
 
       enabled: true,
+
+      resistance: 20,
+      maxPower: 10,
+      maxCurrent: 1,
+      maxVoltage: 24,
 
       position: {
         x: 560,
@@ -102,6 +114,11 @@ export const defaultCircuit = {
 
       enabled: true,
 
+      resistance: 10,
+      maxPower: 25,
+      maxCurrent: 2,
+      maxVoltage: 24,
+
       position: {
         x: 560,
         y: 190,
@@ -118,6 +135,11 @@ export const defaultCircuit = {
       value: false,
 
       enabled: true,
+
+      resistance: 100,
+      maxPower: 0.15,
+      maxCurrent: 0.03,
+      maxVoltage: 5,
 
       position: {
         x: 560,

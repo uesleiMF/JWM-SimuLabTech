@@ -57,8 +57,20 @@ function getLogicalTerminalPosition(
   } else if (side === "top") {
     localX = size.w / 2;
     localY = 0;
+  } else if (side === "top-left") {
+    localX = size.w * 0.28;
+    localY = 0;
+  } else if (side === "top-right") {
+    localX = size.w * 0.72;
+    localY = 0;
   } else if (side === "bottom") {
     localX = size.w / 2;
+    localY = size.h;
+  } else if (side === "bottom-left") {
+    localX = size.w * 0.28;
+    localY = size.h;
+  } else if (side === "bottom-right") {
+    localX = size.w * 0.72;
     localY = size.h;
   }
 

@@ -134,6 +134,86 @@ export const EXERCISES = [
       switchMustBeClosed: true,
     },
   },
+  {
+    id: "ex-contactor-motor",
+    title: "Partida com contator",
+    description:
+      "Alimente a bobina A1/A2 do Contator com uma Botoeira NA. Os contatos de potência devem energizar o Motor. (Opcional: use o auxiliar 13-14 para selo.)",
+    difficulty: "Difícil",
+    points: 220,
+    requiredTypes: [
+      COMPONENT_TYPES.SOURCE,
+      COMPONENT_TYPES.PUSH_BUTTON_NO,
+      COMPONENT_TYPES.CONTACTOR,
+      COMPONENT_TYPES.MOTOR,
+    ],
+    rules: {
+      mustHaveClosedCircuit: true,
+      mustEnergizeTypes: [COMPONENT_TYPES.MOTOR],
+      controlMustBeClosed: true,
+    },
+  },
+  {
+    id: "ex-motor-thermal",
+    title: "Motor com relé térmico",
+    description:
+      "Monte Fonte, Relé térmico RT e Motor. Com corrente acima do ajuste do RT, o relé deve aquecer e desarmar.",
+    difficulty: "Difícil",
+    points: 200,
+    requiredTypes: [
+      COMPONENT_TYPES.SOURCE,
+      COMPONENT_TYPES.THERMAL_RELAY,
+      COMPONENT_TYPES.MOTOR,
+    ],
+    rules: {
+      mustHaveClosedCircuit: true,
+      mustEnergizeTypes: [COMPONENT_TYPES.MOTOR],
+    },
+  },
+  {
+    id: "ex-fuse-protection",
+    title: "Proteção por fusível",
+    description:
+      "Inclua Seccionador FU no circuito de uma carga. Ajuste a corrente de atuação baixa e provoque a queima do fusível.",
+    difficulty: "Médio",
+    points: 160,
+    requiredTypes: [
+      COMPONENT_TYPES.SOURCE,
+      COMPONENT_TYPES.FUSE_ISOLATOR,
+    ],
+    rules: {
+      mustHaveClosedCircuit: true,
+      mustEnergizeAnyLoad: true,
+      requireOneOfTypes: [
+        COMPONENT_TYPES.LAMP,
+        COMPONENT_TYPES.MOTOR,
+        COMPONENT_TYPES.LED,
+        COMPONENT_TYPES.INDICATOR,
+      ],
+    },
+  },
+  {
+    id: "ex-timer-ton",
+    title: "Temporizador TON",
+    description:
+      "Energize a bobina A1/A2 do Temporizador TON. Após o atraso configurado, o contato 15-18 deve fechar e alimentar uma lâmpada ou sinalizador.",
+    difficulty: "Difícil",
+    points: 230,
+    requiredTypes: [
+      COMPONENT_TYPES.SOURCE,
+      COMPONENT_TYPES.TIMER_ON_DELAY,
+    ],
+    rules: {
+      mustHaveClosedCircuit: true,
+      mustEnergizeAnyLoad: true,
+      requireOneOfTypes: [
+        COMPONENT_TYPES.LAMP,
+        COMPONENT_TYPES.INDICATOR,
+        COMPONENT_TYPES.LED,
+        COMPONENT_TYPES.MOTOR,
+      ],
+    },
+  },
 ];
 
 export function getExerciseById(id) {

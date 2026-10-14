@@ -13,21 +13,24 @@ export function getComponentTerminals(component) {
     /**
      * FONTE
      */
-    case COMPONENT_TYPES.SOURCE:
+    case COMPONENT_TYPES.SOURCE: {
+      const isAC =
+        String(component.mode || "DC").toUpperCase() === "AC";
       return [
         {
           id: "positive",
           type: TERMINAL_TYPES.POSITIVE,
-          label: "+",
+          label: isAC ? "L" : "+",
           position: "left",
         },
         {
           id: "negative",
           type: TERMINAL_TYPES.NEGATIVE,
-          label: "−",
+          label: isAC ? "N" : "−",
           position: "right",
         },
       ];
+    }
 
     /**
      * RESISTOR
@@ -54,7 +57,6 @@ export function getComponentTerminals(component) {
     case COMPONENT_TYPES.SWITCH:
     case COMPONENT_TYPES.PUSH_BUTTON_NO:
     case COMPONENT_TYPES.PUSH_BUTTON_NC:
-    case COMPONENT_TYPES.CONTACTOR:
     case COMPONENT_TYPES.BREAKER:
     case COMPONENT_TYPES.FUSE_ISOLATOR:
     case COMPONENT_TYPES.THERMAL_RELAY:
@@ -69,6 +71,80 @@ export function getComponentTerminals(component) {
           id: "output",
           type: TERMINAL_TYPES.OUTPUT,
           label: "B",
+          position: "right",
+        },
+      ];
+
+    /**
+     * CONTATOR: bobina A1/A2, potência e auxiliar NA
+     */
+    case COMPONENT_TYPES.CONTACTOR:
+      return [
+        {
+          id: "a1",
+          type: TERMINAL_TYPES.INPUT,
+          label: "A1",
+          position: "top-left",
+        },
+        {
+          id: "a2",
+          type: TERMINAL_TYPES.OUTPUT,
+          label: "A2",
+          position: "top-right",
+        },
+        {
+          id: "input",
+          type: TERMINAL_TYPES.INPUT,
+          label: "1",
+          position: "left",
+        },
+        {
+          id: "output",
+          type: TERMINAL_TYPES.OUTPUT,
+          label: "2",
+          position: "right",
+        },
+        {
+          id: "aux_in",
+          type: TERMINAL_TYPES.INPUT,
+          label: "13",
+          position: "bottom-left",
+        },
+        {
+          id: "aux_out",
+          type: TERMINAL_TYPES.OUTPUT,
+          label: "14",
+          position: "bottom-right",
+        },
+      ];
+
+    /**
+     * TEMPORIZADOR TON: bobina + contato temporizado
+     */
+    case COMPONENT_TYPES.TIMER_ON_DELAY:
+      return [
+        {
+          id: "a1",
+          type: TERMINAL_TYPES.INPUT,
+          label: "A1",
+          position: "top-left",
+        },
+        {
+          id: "a2",
+          type: TERMINAL_TYPES.OUTPUT,
+          label: "A2",
+          position: "top-right",
+        },
+        {
+          id: "input",
+          type: TERMINAL_TYPES.INPUT,
+          label: "15",
+          position: "left",
+        },
+        {
+          id: "output",
+          type: TERMINAL_TYPES.OUTPUT,
+          label: "18",
           position: "right",
         },
       ];
