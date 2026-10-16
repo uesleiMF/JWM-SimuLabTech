@@ -39,6 +39,7 @@ import {
   FileDown,
   RotateCw,
   History,
+  Gauge,
 } from "lucide-react";
 
 import "./Laboratory.css";
@@ -46,6 +47,7 @@ import "./Laboratory.css";
 import { simulateCircuit } from "../../simulator/circuitEngine";
 import { COMPONENT_TYPES } from "../../simulator/components/componentTypes";
 import { componentCatalog } from "../../simulator/components/componentCatalog";
+import { ComponentFigure } from "../../simulator/components/ComponentFigures";
 import ComponentNode from "../../simulator/ComponentNode";
 import ConnectionLayer from "../../components/Laboratory/ConnectionLayer";
 
@@ -68,6 +70,8 @@ import {
   getExerciseById,
   validateExercise,
 } from "../../simulator/exercises";
+
+import { recordExerciseCompletion } from "../../services/progressService";
 
 import { createInitialCircuit } from "./hooks/useLaboratory";
 
@@ -130,6 +134,34 @@ export default function Laboratory() {
     coils: {},
     overloaded: {},
   });
+
+  /* ==================================================
+     SNAP TO GRID
+  ================================================== */
+
+  const GRID_SIZE = 20;
+  const [snapEnabled, setSnapEnabled] = useState(true);
+
+  /* ==================================================
+     MULTÍMETRO (Passo 7)
+  ================================================== */
+
+  const [meterMode, setMeterMode] = useState(null); // null | "volt" | "amp"
+  const [meterTargetId, setMeterTargetId] = useState(null);
+
+
+  const snapToGrid = (value) => {
+    if (!snapEnabled) return value;
+    return Math.round(Number(value) / GRID_SIZE) * GRID_SIZE;
+  };
+
+  const snapPoint = (point) => {
+    if (!point) return point;
+    return {
+      x: snapToGrid(point.x),
+      y: snapToGrid(point.y),
+    };
+  };
 
 
   /* ==================================================
@@ -273,10 +305,139 @@ export default function Laboratory() {
      SIMULAÇÃO
   ================================================== */
 
-  const simulation = useMemo(
-    () => simulateCircuit(circuit),
-    [circuit]
+  const simulation = useMemo(() => {
+    try {
+      if (!circuit || !Array.isArray(circuit.components)) {
+        return null;
+      }
+      return simulateCircuit(circuit);
+    } catch (err) {
+      console.error("[SimuLabTech] Erro na simulação:", err);
+      return null;
+    }
+  }, [circuit]);
+
+  /* ==================================================
+     FEEDBACK AUTOMÁTICO DE STATUS / ERROS
+  ================================================== */
+
+  const simStatus = simulation?.status || "incompleto";
+  const isShort = simulation?.shortCircuit === true;
+  const hasOverload = Object.values(simulation?.loads || {}).some(
+    (l) => l?.overloaded
   );
+  const hasTrips =
+    Array.isArray(simulation?.protections?.trips) &&
+    simulation.protections.trips.length > 0;
+  const hasThermal =
+    Array.isArray(simulation?.protections?.thermalPending) &&
+    simulation.protections.thermalPending.length > 0;
+
+  useEffect(() => {
+    // Não sobrescreve mensagens de interação (fio, undo, etc.) se conexão em andamento
+    if (connectionStart) return;
+
+    if (isShort) {
+      setMessage(
+        "⚠ CURTO-CIRCUITO: " +
+          (simulation?.shortReason ||
+            "Polos da fonte ligados sem resistência adequada. Desfaça a conexão.")
+      );
+      return;
+    }
+
+    if (hasTrips) {
+      const reasons = (simulation.protections.trips || [])
+        .map((t) => t.reason)
+        .filter(Boolean)
+        .join(" | ");
+      if (reasons) {
+        setMessage("⚠ Proteção atuou: " + reasons);
+      }
+      return;
+    }
+
+    if (hasOverload) {
+      const reasons = [];
+      Object.values(simulation.loads || {}).forEach((l) => {
+        if (l?.overloaded && Array.isArray(l.overloadReasons)) {
+          reasons.push(...l.overloadReasons);
+        }
+      });
+      if (reasons.length > 0) {
+        setMessage("⚠ Sobrecarga: " + reasons.slice(0, 2).join(" | "));
+      }
+      return;
+    }
+
+    if (hasThermal) {
+      setMessage("🌡 Relé térmico aquecendo por sobrecarga…");
+      return;
+    }
+
+    if (simStatus === "ligado" && simulation?.energized) {
+      // Só atualiza se a mensagem atual for de erro/status genérico
+      setMessage((prev) => {
+        if (
+          !prev ||
+          prev.startsWith("⚠") ||
+          prev.startsWith("🌡") ||
+          prev.includes("desligado") ||
+          prev.includes("incompleto") ||
+          prev.includes("Quadro vazio") ||
+          prev.includes("Circuito")
+        ) {
+          return (
+            "Circuito energizado — " +
+            (simulation.voltage ?? 0) +
+            " V · " +
+            (simulation.current ?? 0) +
+            " A · " +
+            (simulation.power ?? 0) +
+            " W"
+          );
+        }
+        return prev;
+      });
+      return;
+    }
+
+    if (simStatus === "aberto") {
+      setMessage((prev) => {
+        if (
+          !prev ||
+          prev.startsWith("⚠") ||
+          prev.startsWith("🌡") ||
+          prev.includes("energizado")
+        ) {
+          return "Circuito aberto / desligado. Feche o interruptor ou complete as conexões.";
+        }
+        return prev;
+      });
+      return;
+    }
+
+    if (simStatus === "incompleto") {
+      setMessage((prev) => {
+        if (!prev || prev.startsWith("⚠") || prev.includes("energizado")) {
+          return "Circuito incompleto: adicione fonte, carga e conecte os terminais.";
+        }
+        return prev;
+      });
+    }
+  }, [
+    simStatus,
+    isShort,
+    hasOverload,
+    hasTrips,
+    hasThermal,
+    simulation?.voltage,
+    simulation?.current,
+    simulation?.power,
+    simulation?.shortReason,
+    connectionStart,
+  ]);
+
 
   /* ==================================================
      SONS (motor, botoeiras, contator, proteções)
@@ -971,16 +1132,14 @@ export default function Laboratory() {
   ================================================== */
 
   const pushHistory = (nextCircuit) => {
-    const snapshot = JSON.parse(
-      JSON.stringify(nextCircuit)
-    );
+    const snapshot = JSON.parse(JSON.stringify(nextCircuit));
 
     setHistory((currentHistory) => {
-      const nextHistory = [
-        ...currentHistory,
-        snapshot,
-      ].slice(-30);
+      // Descarta o "futuro" se o usuário desfez e depois fez nova ação
+      const base = currentHistory.slice(0, historyIndex + 1);
+      const nextHistory = [...base, snapshot].slice(-40);
 
+      // Atualiza índice de forma segura
       setHistoryIndex(nextHistory.length - 1);
 
       return nextHistory;
@@ -992,14 +1151,18 @@ export default function Laboratory() {
      ATUALIZAR CIRCUITO COM HISTÓRICO
   ================================================== */
 
-  const updateCircuit = (updater) => {
+  const updateCircuit = (updater, options = {}) => {
+    const { skipHistory = false } = options;
+
     setCircuit((current) => {
       const next =
         typeof updater === "function"
           ? updater(current)
           : updater;
 
-      pushHistory(next);
+      if (!skipHistory) {
+        pushHistory(next);
+      }
 
       return next;
     });
@@ -1012,32 +1175,55 @@ export default function Laboratory() {
 
   const handleUndo = () => {
     if (historyIndex <= 0) {
-      setMessage(
-        "Não há ações para desfazer."
-      );
+      setMessage("Não há ações para desfazer.");
       return;
     }
 
-    const previousIndex =
-      historyIndex - 1;
-
-    const previousCircuit =
-      history[previousIndex];
+    const previousIndex = historyIndex - 1;
+    const previousCircuit = history[previousIndex];
 
     if (!previousCircuit) {
       return;
     }
 
     setHistoryIndex(previousIndex);
-    setCircuit(
-      JSON.parse(
-        JSON.stringify(previousCircuit)
-      )
-    );
+    setCircuit(JSON.parse(JSON.stringify(previousCircuit)));
 
+    // Limpa estados temporários de desenho
     setConnectionStart(null);
     setMousePosition(null);
+    setSelectedWireId(null);
+
     setMessage("Ação desfeita.");
+  };
+
+  /* ==================================================
+     RESETAR PROTEÇÕES (disjuntor, fusível, relé térmico)
+  ================================================== */
+
+  const handleResetProtections = () => {
+    updateCircuit((current) => {
+      const components = (current.components || []).map((comp) => {
+        if (
+          comp.type === COMPONENT_TYPES.BREAKER ||
+          comp.type === COMPONENT_TYPES.FUSE_ISOLATOR ||
+          comp.type === COMPONENT_TYPES.THERMAL_RELAY
+        ) {
+          return {
+            ...comp,
+            tripped: false,
+            burned: false,
+            value: true, // volta armado / íntegro
+          };
+        }
+        return comp;
+      });
+      return { ...current, components };
+    });
+
+    // Limpa progresso de aquecimento térmico
+    setThermalHeat({});
+    setMessage("Proteções rearmadas (disjuntores, fusíveis e relés térmicos).");
   };
 
 
@@ -1066,6 +1252,15 @@ export default function Laboratory() {
     const result = validateExercise(circuit, activeExerciseId);
     setValidationResult(result);
     setMessage(result.message);
+
+    if (result.ok && result.exercise) {
+      recordExerciseCompletion({
+        id: result.exercise.id,
+        title: result.exercise.title,
+        score: result.score,
+        points: result.exercise.points || 0,
+      });
+    }
   };
 
   const handleClearExercise = () => {
@@ -1223,6 +1418,17 @@ export default function Laboratory() {
     }
   };
 
+  const handleRemoveRecent = (entryId) => {
+    try {
+      const next = readRecentList().filter((item) => item && item.id !== entryId);
+      localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+      setRecentCircuits(next);
+      setMessage("Circuito removido dos recentes.");
+    } catch {
+      setMessage("Não foi possível remover o item.");
+    }
+  };
+
   const handleClearRecent = () => {
     try {
       localStorage.removeItem(RECENT_KEY);
@@ -1234,8 +1440,26 @@ export default function Laboratory() {
     setMessage("Lista de circuitos recentes limpa.");
   };
 
-  const applyLoadedCircuit = (loaded, sourceLabel) => {
+  const applyLoadedCircuit = (loaded, sourceLabel, options = {}) => {
     if (!loaded) return false;
+
+    const { skipConfirm = false } = options;
+
+    // Confirma se o quadro atual tem trabalho
+    if (!skipConfirm) {
+      const currentCount =
+        (Array.isArray(circuit?.components) ? circuit.components.length : 0) +
+        (Array.isArray(circuit?.wires) ? circuit.wires.length : 0);
+      if (currentCount > 0) {
+        const ok = window.confirm(
+          "O quadro atual tem componentes/fios.\n\nDeseja substituir pelo circuito carregado?\n(O trabalho atual será perdido se não estiver salvo.)"
+        );
+        if (!ok) {
+          setMessage("Abertura cancelada. O quadro atual foi mantido.");
+          return false;
+        }
+      }
+    }
 
     // Garante estrutura mínima para o quadro renderizar
     const components = (Array.isArray(loaded.components) ? loaded.components : [])
@@ -1296,6 +1520,47 @@ export default function Laboratory() {
     );
     return true;
   };
+
+
+  /* ==================================================
+     AUTO-SAVE (localStorage) — a cada alteração do circuito
+  ================================================== */
+
+  useEffect(() => {
+    // Não salva o quadro inicial vazio logo no mount
+    if (!circuit) return;
+    const nComp = Array.isArray(circuit.components) ? circuit.components.length : 0;
+    const nWire = Array.isArray(circuit.wires) ? circuit.wires.length : 0;
+    if (nComp === 0 && nWire === 0) return;
+
+    const timer = setTimeout(() => {
+      try {
+        const payload = {
+          app: "JWM-SimuLabTech",
+          type: "circuit",
+          version: 1,
+          savedAt: new Date().toISOString(),
+          circuit: {
+            id: circuit.id || `circuito-${Date.now()}`,
+            name: circuit.name || "Novo Circuito",
+            description: circuit.description || "",
+            components: JSON.parse(JSON.stringify(circuit.components || [])),
+            wires: JSON.parse(JSON.stringify(circuit.wires || [])),
+            selectedComponent: null,
+            selectedWire: null,
+          },
+        };
+        localStorage.setItem(
+          "jwm_simulabtech_circuit",
+          JSON.stringify(payload)
+        );
+      } catch (err) {
+        console.warn("[JWM] Auto-save falhou:", err);
+      }
+    }, 800); // debounce 800ms
+
+    return () => clearTimeout(timer);
+  }, [circuit]);
 
   const handleSaveCircuit = () => {
     console.log("[JWM] Salvar clicado — download + localStorage");
@@ -1446,6 +1711,22 @@ export default function Laboratory() {
         "Não foi possível ler o arquivo. Ele precisa ser um JSON válido salvo por este laboratório."
       );
       return false;
+    }
+  };
+
+  const handleRestoreLastSaved = () => {
+    try {
+      const raw = localStorage.getItem("jwm_simulabtech_circuit");
+      if (!raw) {
+        setMessage(
+          "Nenhum circuito salvo automaticamente no navegador ainda."
+        );
+        return;
+      }
+      loadCircuitFromText(raw, "último auto-salvo no navegador");
+    } catch (err) {
+      console.error("[JWM] Restaurar último:", err);
+      setMessage("Não foi possível restaurar o último circuito.");
     }
   };
 
@@ -1680,8 +1961,8 @@ export default function Laboratory() {
 
     // ---- Diagrama SVG a partir dos dados (fios alinhados) ----
     const sizes = {
-      blocos: { w: 92, h: 76 },
-      esquema: { w: 72, h: 56 },
+      blocos: { w: 78, h: 70 },
+      esquema: { w: 96, h: 78 },
       "3d": { w: 110, h: 96 },
     };
     const size = sizes[viewMode] || sizes.blocos;
@@ -1966,6 +2247,196 @@ export default function Laboratory() {
     }, 400);
   };
 
+  /* ==================================================
+     EXPORTAR PNG (diagrama do circuito)
+  ================================================== */
+
+  const handleExportPng = () => {
+    try {
+      const sizes = {
+        blocos: { w: 78, h: 70 },
+        esquema: { w: 96, h: 78 },
+        "3d": { w: 110, h: 96 },
+      };
+      const size = sizes[viewMode] || sizes.blocos;
+      const components = circuit.components || [];
+      const wires = circuit.wires || [];
+
+      if (components.length === 0) {
+        setMessage("Quadro vazio — adicione componentes antes de exportar PNG.");
+        return;
+      }
+
+      const terminalPoint = (component, side) => {
+        const x = component.position?.x ?? 0;
+        const y = component.position?.y ?? 0;
+        const rot = ((Number(component.rotation) || 0) * Math.PI) / 180;
+        let lx = size.w / 2;
+        let ly = size.h / 2;
+        if (side === "left") {
+          lx = 0;
+          ly = size.h / 2;
+        } else if (side === "right") {
+          lx = size.w;
+          ly = size.h / 2;
+        } else if (side === "top") {
+          lx = size.w / 2;
+          ly = 0;
+        } else if (side === "bottom") {
+          lx = size.w / 2;
+          ly = size.h;
+        }
+        const cx = x + size.w / 2;
+        const cy = y + size.h / 2;
+        const rx = lx - size.w / 2;
+        const ry = ly - size.h / 2;
+        return {
+          x: cx + rx * Math.cos(rot) - ry * Math.sin(rot),
+          y: cy + rx * Math.sin(rot) + ry * Math.cos(rot),
+        };
+      };
+
+      const terminalSide = (component, terminalId) => {
+        const terminals = getComponentTerminals(component) || [];
+        const found = terminals.find((t) => t.id === terminalId);
+        return found?.position || "right";
+      };
+
+      let minX = 0;
+      let minY = 0;
+      let maxX = 400;
+      let maxY = 300;
+      components.forEach((c) => {
+        const x = c.position?.x ?? 0;
+        const y = c.position?.y ?? 0;
+        minX = Math.min(minX, x - 20);
+        minY = Math.min(minY, y - 20);
+        maxX = Math.max(maxX, x + size.w + 40);
+        maxY = Math.max(maxY, y + size.h + 40);
+      });
+
+      const pad = 32;
+      const svgW = Math.max(480, maxX - minX + pad * 2);
+      const svgH = Math.max(320, maxY - minY + pad * 2);
+      const ox = -minX + pad;
+      const oy = -minY + pad;
+
+      const wirePaths = wires
+        .map((wire) => {
+          const fromComp = components.find(
+            (c) => c.id === wire.from?.componentId
+          );
+          const toComp = components.find(
+            (c) => c.id === wire.to?.componentId
+          );
+          if (!fromComp || !toComp) return "";
+          const start = terminalPoint(
+            fromComp,
+            terminalSide(fromComp, wire.from?.terminalId)
+          );
+          const end = terminalPoint(
+            toComp,
+            terminalSide(toComp, wire.to?.terminalId)
+          );
+          const midX = (start.x + end.x) / 2;
+          const points = Array.isArray(wire.points) ? wire.points : [];
+          if (points.length > 0) {
+            let d = `M ${start.x + ox} ${start.y + oy}`;
+            points.forEach((p) => {
+              d += ` L ${p.x + ox} ${p.y + oy}`;
+            });
+            d += ` L ${end.x + ox} ${end.y + oy}`;
+            return `<path d="${d}" fill="none" stroke="#0f172a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />`;
+          }
+          return `<path d="M ${start.x + ox} ${start.y + oy} L ${midX + ox} ${start.y + oy} L ${midX + ox} ${end.y + oy} L ${end.x + ox} ${end.y + oy}" fill="none" stroke="#0f172a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />`;
+        })
+        .join("");
+
+      const componentRects = components
+        .map((c) => {
+          const x = (c.position?.x ?? 0) + ox;
+          const y = (c.position?.y ?? 0) + oy;
+          const label = String(c.name || c.type || "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;");
+          const value =
+            c.value != null
+              ? `${c.value}${c.unit ? ` ${c.unit}` : ""}`
+              : "";
+          return `
+            <rect x="${x}" y="${y}" width="${size.w}" height="${size.h}" rx="8" fill="#ffffff" stroke="#334155" stroke-width="1.5" />
+            <text x="${x + size.w / 2}" y="${y + size.h / 2 - 4}" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a" font-family="system-ui,sans-serif">${label}</text>
+            <text x="${x + size.w / 2}" y="${y + size.h / 2 + 12}" text-anchor="middle" font-size="10" fill="#64748b" font-family="system-ui,sans-serif">${value}</text>
+          `;
+        })
+        .join("");
+
+      const title = (
+        (circuit.name && String(circuit.name).trim()) ||
+        "Circuito JWM SimuLabTech"
+      )
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;");
+
+      const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${svgH + 36}" viewBox="0 0 ${svgW} ${svgH + 36}">
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="${pad}" y="22" font-size="14" font-weight="700" fill="#0f172a" font-family="system-ui,sans-serif">${title}</text>
+  <g transform="translate(0, 28)">
+    ${wirePaths}
+    ${componentRects}
+  </g>
+</svg>`;
+
+      const blob = new Blob([svg], {
+        type: "image/svg+xml;charset=utf-8",
+      });
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = svgW * 2;
+        canvas.height = (svgH + 36) * 2;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#f8fafc";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.scale(2, 2);
+        ctx.drawImage(img, 0, 0);
+        URL.revokeObjectURL(url);
+        canvas.toBlob((pngBlob) => {
+          if (!pngBlob) {
+            setMessage("Não foi possível gerar o PNG.");
+            return;
+          }
+          const a = document.createElement("a");
+          const stamp = new Date()
+            .toISOString()
+            .slice(0, 19)
+            .replace(/[:T]/g, "-");
+          a.href = URL.createObjectURL(pngBlob);
+          a.download = `circuito-${stamp}.png`;
+          a.click();
+          setMessage("PNG exportado com sucesso.");
+        }, "image/png");
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        // Fallback: baixar SVG direto
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(
+          new Blob([svg], { type: "image/svg+xml" })
+        );
+        a.download = "circuito.svg";
+        a.click();
+        setMessage("Exportado como SVG (fallback).");
+      };
+      img.src = url;
+    } catch (err) {
+      console.error("[JWM] Export PNG:", err);
+      setMessage("Erro ao exportar PNG.");
+    }
+  };
+
 
   /* ==================================================
      ATALHOS DE TECLADO
@@ -2034,6 +2505,17 @@ export default function Laboratory() {
       ) {
         event.preventDefault();
         handleUndo();
+        return;
+      }
+
+      // Ctrl+S ou Cmd+S → salvar
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.key.toLowerCase() === "s"
+      ) {
+        event.preventDefault();
+        handleSaveCircuit();
+        return;
       }
     };
 
@@ -2081,6 +2563,32 @@ export default function Laboratory() {
       setConnectionStart(null);
       setMessage("Componente removido.");
       return;
+    }
+
+    // Multímetro: aponta a sonda para o componente
+    if (meterMode === "volt" || meterMode === "amp") {
+      setMeterTargetId(componentId);
+      const comp = (circuit.components || []).find(
+        (c) => c.id === componentId
+      );
+      const loadState =
+        simulation?.loads?.[componentId] ||
+        simulation?.loads?.[`__resistor__${componentId}`];
+      const name = comp?.name || componentId;
+      if (meterMode === "volt") {
+        const v = loadState?.energized
+          ? Number(simulation?.voltage ?? 0)
+          : 0;
+        setMessage(
+          `Voltímetro → ${name}: ${v.toFixed(2)} V`
+        );
+      } else {
+        const i = Number(loadState?.current ?? 0);
+        setMessage(
+          `Amperímetro → ${name}: ${i.toFixed(4)} A`
+        );
+      }
+      // Também seleciona para ver propriedades
     }
 
     setSelectedWireId(null);
@@ -2284,13 +2792,20 @@ export default function Laboratory() {
          ATUALIZAR POSIÇÃO
       ================================================== */
 
+      const snappedX = snapEnabled
+        ? Math.round(x / GRID_SIZE) * GRID_SIZE
+        : x;
+      const snappedY = snapEnabled
+        ? Math.round(y / GRID_SIZE) * GRID_SIZE
+        : y;
+
       setCircuit((current) =>
         updateComponentPosition(
           current,
           component.id,
           {
-            x,
-            y,
+            x: snappedX,
+            y: snappedY,
           }
         )
       );
@@ -2934,10 +3449,17 @@ export default function Laboratory() {
         return;
       }
 
-      const point = clientToBoardLocal(
+      const rawPoint = clientToBoardLocal(
         event.clientX,
         event.clientY
       );
+
+      const point = snapEnabled
+        ? {
+            x: Math.round(rawPoint.x / GRID_SIZE) * GRID_SIZE,
+            y: Math.round(rawPoint.y / GRID_SIZE) * GRID_SIZE,
+          }
+        : rawPoint;
 
       setConnectionWaypoints((prev) => [...prev, point]);
 
@@ -3532,6 +4054,76 @@ export default function Laboratory() {
           <button
             type="button"
             className="laboratory-action-button"
+            onClick={handleResetProtections}
+            title="Rearmar todos os disjuntores, fusíveis e relés térmicos"
+          >
+            <RotateCcw size={18} />
+            Rearmar
+          </button>
+
+          <button
+            type="button"
+            className={
+              "laboratory-action-button" +
+              (snapEnabled ? " is-active-tool" : "")
+            }
+            onClick={() => {
+              setSnapEnabled((v) => !v);
+              setMessage(
+                !snapEnabled
+                  ? "Snap to grid ATIVADO (20 px)."
+                  : "Snap to grid desativado."
+              );
+            }}
+            title="Alinhar componentes e pontos de fio à grade"
+          >
+            <LayoutGrid size={18} />
+            {snapEnabled ? "Snap ON" : "Snap OFF"}
+          </button>
+
+          <button
+            type="button"
+            className={
+              "laboratory-action-button" +
+              (meterMode === "volt" ? " is-active-tool" : "")
+            }
+            onClick={() => {
+              setMeterMode((m) => (m === "volt" ? null : "volt"));
+              setMessage(
+                meterMode === "volt"
+                  ? "Multímetro desligado."
+                  : "Voltímetro ativo: clique em um componente para medir tensão."
+              );
+            }}
+            title="Voltímetro — clique em um componente"
+          >
+            <Gauge size={18} />
+            V
+          </button>
+
+          <button
+            type="button"
+            className={
+              "laboratory-action-button" +
+              (meterMode === "amp" ? " is-active-tool" : "")
+            }
+            onClick={() => {
+              setMeterMode((m) => (m === "amp" ? null : "amp"));
+              setMessage(
+                meterMode === "amp"
+                  ? "Multímetro desligado."
+                  : "Amperímetro ativo: clique em um componente para medir corrente."
+              );
+            }}
+            title="Amperímetro — clique em um componente"
+          >
+            <Activity size={18} />
+            A
+          </button>
+
+          <button
+            type="button"
+            className="laboratory-action-button"
             onClick={handleSaveCircuit}
             title="Salvar circuito no computador (.json) — você pode nomear antes de baixar"
           >
@@ -3608,6 +4200,29 @@ export default function Laboratory() {
                   padding: "8px",
                 }}
               >
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleRestoreLastSaved();
+                    setShowRecent(false);
+                  }}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    textAlign: "left",
+                    padding: "10px 12px",
+                    marginBottom: "6px",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border-focus, #3b82f6)",
+                    background: "var(--primary-soft, rgba(59,130,246,0.15))",
+                    color: "var(--text-primary, #e2e8f0)",
+                    cursor: "pointer",
+                    fontWeight: 600,
+                    fontSize: "13px",
+                  }}
+                >
+                  ↩ Restaurar último auto-salvo
+                </button>
                 {recentCircuits.length === 0 ? (
                   <div
                     style={{
@@ -3620,72 +4235,112 @@ export default function Laboratory() {
                   </div>
                 ) : (
                   recentCircuits.map((item) => (
-                    <button
+                    <div
                       key={item.id + (item.savedAt || "")}
-                      type="button"
-                      onClick={() => handleOpenRecent(item)}
                       style={{
-                        display: "block",
-                        width: "100%",
-                        textAlign: "left",
-                        padding: "10px 12px",
+                        display: "flex",
+                        alignItems: "stretch",
                         marginBottom: "4px",
                         borderRadius: "8px",
                         border: "1px solid transparent",
-                        background: "transparent",
-                        color: "var(--text-primary, #e2e8f0)",
-                        cursor: "pointer",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background =
-                          "var(--bg-panel-2, #1a2332)";
-                        e.currentTarget.style.borderColor =
-                          "var(--border-focus, #3b82f6)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = "transparent";
-                        e.currentTarget.style.borderColor = "transparent";
                       }}
                     >
-                      <div
+                      <button
+                        type="button"
+                        onClick={() => handleOpenRecent(item)}
                         style={{
-                          fontWeight: 700,
-                          fontSize: "13px",
-                          marginBottom: 2,
+                          flex: 1,
+                          textAlign: "left",
+                          padding: "10px 12px",
+                          borderRadius: "8px 0 0 8px",
+                          border: "none",
+                          background: "transparent",
+                          color: "var(--text-primary, #e2e8f0)",
+                          cursor: "pointer",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.parentElement.style.background =
+                            "var(--bg-panel-2, #1a2332)";
+                          e.currentTarget.parentElement.style.borderColor =
+                            "var(--border-focus, #3b82f6)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.parentElement.style.background =
+                            "transparent";
+                          e.currentTarget.parentElement.style.borderColor =
+                            "transparent";
                         }}
                       >
-                        {item.name || "Sem nome"}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: "11px",
-                          color: "var(--text-secondary, #94a3b8)",
-                        }}
-                      >
-                        {(item.componentCount || 0) +
-                          " comp · " +
-                          (item.wireCount || 0) +
-                          " fios"}
-                        {item.savedAt
-                          ? " · " +
-                            new Date(item.savedAt).toLocaleString("pt-BR")
-                          : ""}
-                      </div>
-                      {item.description ? (
+                        <div
+                          style={{
+                            fontWeight: 700,
+                            fontSize: "13px",
+                            marginBottom: 2,
+                          }}
+                        >
+                          {item.name || "Sem nome"}
+                        </div>
                         <div
                           style={{
                             fontSize: "11px",
                             color: "var(--text-secondary, #94a3b8)",
-                            marginTop: 4,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
                           }}
                         >
-                          {item.description}
+                          {(item.componentCount || 0) +
+                            " comp · " +
+                            (item.wireCount || 0) +
+                            " fios"}
+                          {item.savedAt
+                            ? " · " +
+                              new Date(item.savedAt).toLocaleString("pt-BR")
+                            : ""}
                         </div>
-                      ) : null}
-                    </button>
+                        {item.description ? (
+                          <div
+                            style={{
+                              fontSize: "11px",
+                              color: "var(--text-secondary, #94a3b8)",
+                              marginTop: 4,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {item.description}
+                          </div>
+                        ) : null}
+                      </button>
+                      <button
+                        type="button"
+                        title="Remover dos recentes"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveRecent(item.id);
+                        }}
+                        style={{
+                          width: 36,
+                          border: "none",
+                          borderRadius: "0 8px 8px 0",
+                          background: "transparent",
+                          color: "var(--text-muted, #64748b)",
+                          cursor: "pointer",
+                          fontSize: 16,
+                          lineHeight: 1,
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.color = "#ef4444";
+                          e.currentTarget.style.background =
+                            "rgba(239,68,68,0.12)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.color =
+                            "var(--text-muted, #64748b)";
+                          e.currentTarget.style.background = "transparent";
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
                   ))
                 )}
 
@@ -3722,6 +4377,16 @@ export default function Laboratory() {
           >
             <FileDown size={18} />
             PDF
+          </button>
+
+          <button
+            type="button"
+            className="laboratory-action-button"
+            onClick={handleExportPng}
+            title="Exportar diagrama do circuito em PNG"
+          >
+            <FileDown size={18} />
+            PNG
           </button>
 
           <button
@@ -3848,31 +4513,58 @@ export default function Laboratory() {
         </div>
 
 
-        <div className="toolbar-status">
-
+        <div
+          className={
+            "toolbar-status" +
+            (isShort
+              ? " is-danger"
+              : hasTrips || hasOverload
+                ? " is-warning"
+                : simulation?.energized
+                  ? " is-ok"
+                  : "")
+          }
+        >
           <span
-            className={`status-dot ${
-              simulation.energized
-                ? "active"
-                : ""
-            }`}
+            className={
+              "status-dot" +
+              (isShort
+                ? " danger"
+                : hasTrips || hasOverload
+                  ? " warning"
+                  : simulation?.energized
+                    ? " active"
+                    : "")
+            }
           />
-
           <span>
-            {simulation.energized
-              ? "Circuito energizado"
-              : "Circuito desligado"}
+            {isShort
+              ? "CURTO-CIRCUITO"
+              : hasTrips
+                ? "Proteção atuou"
+                : hasOverload
+                  ? "Sobrecarga"
+                  : simulation?.energized
+                    ? "Circuito energizado"
+                    : simStatus === "incompleto"
+                      ? "Incompleto"
+                      : "Circuito desligado"}
           </span>
-
         </div>
 
-
-        <div className="toolbar-message">
-
+        <div
+          className={
+            "toolbar-message" +
+            (isShort
+              ? " is-danger"
+              : hasTrips || hasOverload
+                ? " is-warning"
+                : "")
+          }
+        >
           {connectionStart
             ? "Ligando fio… clique em outro terminal ou no quadro para cantos. (Esc cancela)"
             : message}
-
         </div>
 
 
@@ -4037,7 +4729,7 @@ export default function Laboratory() {
                 <div>
 
                   <span>
-                    COMPONENTE SELECIONADO
+                    PROPRIEDADES
                   </span>
 
                   <strong>
@@ -4045,6 +4737,22 @@ export default function Laboratory() {
                       selectedComponent.name
                     }
                   </strong>
+
+                  <small style={{
+                    display: "block",
+                    marginTop: 2,
+                    opacity: 0.7,
+                    fontSize: 11,
+                    fontWeight: 500,
+                  }}>
+                    {selectedComponent.type}
+                    {selectedComponent.tripped
+                      ? " · DESARMADO"
+                      : ""}
+                    {selectedComponent.burned
+                      ? " · QUEIMADO"
+                      : ""}
+                  </small>
 
                 </div>
 
@@ -4108,6 +4816,103 @@ export default function Laboratory() {
 
               </div>
 
+              {/* Nome editável */}
+              <label style={{ marginBottom: 8 }}>
+                <span>Nome</span>
+                <input
+                  type="text"
+                  value={selectedComponent.name || ""}
+                  onChange={(event) => {
+                    const name = event.target.value;
+                    updateCircuit((current) =>
+                      updateComponent(
+                        current,
+                        selectedComponent.id,
+                        { name }
+                      )
+                    );
+                  }}
+                />
+              </label>
+
+              {/* Leituras ao vivo da simulação */}
+              {(() => {
+                const loadState =
+                  simulation?.loads?.[selectedComponent.id] ||
+                  simulation?.loads?.[`__resistor__${selectedComponent.id}`];
+                const coil =
+                  simulation?.coils?.[selectedComponent.id];
+                if (!loadState && !coil && !simulation?.energized) {
+                  return null;
+                }
+                return (
+                  <div
+                    className="props-live-readout"
+                    style={{
+                      marginBottom: 10,
+                      padding: "8px 10px",
+                      borderRadius: 8,
+                      border: "1px solid var(--border, #1e293b)",
+                      background: "var(--bg-panel-2, #1a2332)",
+                      fontSize: 12,
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: 6,
+                    }}
+                  >
+                    {loadState && (
+                      <>
+                        <div>
+                          <span style={{ opacity: 0.65 }}>Estado</span>
+                          <strong style={{ display: "block" }}>
+                            {loadState.energized
+                              ? loadState.overloaded
+                                ? "Sobrecarga"
+                                : "Energizado"
+                              : "Desligado"}
+                          </strong>
+                        </div>
+                        <div>
+                          <span style={{ opacity: 0.65 }}>Corrente</span>
+                          <strong style={{ display: "block" }}>
+                            {Number(loadState.current || 0).toFixed(3)} A
+                          </strong>
+                        </div>
+                        <div>
+                          <span style={{ opacity: 0.65 }}>Potência</span>
+                          <strong style={{ display: "block" }}>
+                            {Number(loadState.power || 0).toFixed(2)} W
+                          </strong>
+                        </div>
+                        <div>
+                          <span style={{ opacity: 0.65 }}>Tensão</span>
+                          <strong style={{ display: "block" }}>
+                            {loadState.energized
+                              ? `${simulation?.voltage ?? 0} V`
+                              : "0 V"}
+                          </strong>
+                        </div>
+                      </>
+                    )}
+                    {coil && (
+                      <>
+                        <div>
+                          <span style={{ opacity: 0.65 }}>Bobina</span>
+                          <strong style={{ display: "block" }}>
+                            {coil.coilEnergized ? "Energizada" : "Desligada"}
+                          </strong>
+                        </div>
+                        <div>
+                          <span style={{ opacity: 0.65 }}>Contatos</span>
+                          <strong style={{ display: "block" }}>
+                            {coil.contactsClosed ? "Fechados" : "Abertos"}
+                          </strong>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
 
               {typeof selectedComponent.value ===
                 "number" && (
@@ -4115,7 +4920,15 @@ export default function Laboratory() {
                 <label>
 
                   <span>
-                    Valor
+                    {selectedComponent.type === COMPONENT_TYPES.SOURCE
+                      ? "Tensão"
+                      : selectedComponent.type === COMPONENT_TYPES.RESISTOR
+                        ? "Resistência"
+                        : selectedComponent.type === COMPONENT_TYPES.CAPACITOR
+                          ? "Capacitância"
+                          : selectedComponent.type === COMPONENT_TYPES.INDUCTOR
+                            ? "Indutância"
+                            : "Valor"}
                   </span>
 
 
@@ -4291,7 +5104,11 @@ export default function Laboratory() {
                   COMPONENT_TYPES.PUSH_BUTTON_NC,
                   COMPONENT_TYPES.CONTACTOR,
                   COMPONENT_TYPES.BREAKER,
-                ].includes(selectedComponent.type) && (
+                  COMPONENT_TYPES.FUSE_ISOLATOR,
+                  COMPONENT_TYPES.THERMAL_RELAY,
+                ].includes(selectedComponent.type) &&
+                !selectedComponent.tripped &&
+                !selectedComponent.burned && (
 
                 <label>
 
@@ -4682,12 +5499,6 @@ export default function Laboratory() {
             {componentCatalog.map(
               (catalogItem) => {
 
-                const Icon =
-                  iconMap[
-                    catalogItem.id
-                  ] || Zap;
-
-
                 const count = (
                   circuit.components || []
                 ).filter(
@@ -4717,13 +5528,21 @@ export default function Laboratory() {
                   >
 
                     <span
-                      className="component-item-icon"
+                      className="component-item-icon component-item-figure"
                       style={{
                         color:
                           catalogItem.color,
                       }}
                     >
-                      <Icon size={22} />
+                      <ComponentFigure
+                        type={catalogItem.id}
+                        size={
+                          catalogItem.id === "resistor" ? 40 : 32
+                        }
+                        value={
+                          catalogItem.defaultValue ?? catalogItem.value
+                        }
+                      />
                     </span>
 
 
@@ -4985,6 +5804,8 @@ export default function Laboratory() {
               drawTool === "delete" ? "delete-mode" : "",
               drawTool === "pan" ? "pan-mode" : "",
               `view-${viewMode}`,
+              isShort ? "is-short" : "",
+              !isShort && (hasOverload || hasTrips || hasThermal) ? "is-warning" : "",
             ]
               .filter(Boolean)
               .join(" ")}
@@ -5045,6 +5866,120 @@ export default function Laboratory() {
               viewMode={viewMode}
             />
 
+
+            {/* ==================================================
+                MULTÍMETRO (HUD)
+            ================================================== */}
+            {meterMode && (
+              <div
+                className="multimeter-hud"
+                style={{
+                  position: "absolute",
+                  top: 12,
+                  right: 12,
+                  zIndex: 30,
+                  minWidth: 180,
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border: "1px solid var(--border-focus, #3b82f6)",
+                  background: "rgba(15, 23, 42, 0.95)",
+                  boxShadow: "0 8px 28px rgba(0,0,0,0.4)",
+                  color: "#e2e8f0",
+                  pointerEvents: "auto",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 800,
+                    letterSpacing: "0.06em",
+                    opacity: 0.75,
+                    marginBottom: 6,
+                  }}
+                >
+                  MULTÍMETRO — {meterMode === "volt" ? "VOLTÍMETRO" : "AMPERÍMETRO"}
+                </div>
+                {(() => {
+                  const targetId = meterTargetId || circuit.selectedComponent;
+                  const comp = (circuit.components || []).find(
+                    (c) => c.id === targetId
+                  );
+                  if (!comp) {
+                    return (
+                      <p style={{ margin: 0, fontSize: 13, opacity: 0.8 }}>
+                        Clique em um componente para medir.
+                      </p>
+                    );
+                  }
+                  const loadState =
+                    simulation?.loads?.[comp.id] ||
+                    simulation?.loads?.[`__resistor__${comp.id}`];
+                  const voltage = loadState?.energized
+                    ? Number(simulation?.voltage ?? 0)
+                    : 0;
+                  const current = Number(loadState?.current ?? 0);
+                  const power = Number(loadState?.power ?? 0);
+                  return (
+                    <>
+                      <div style={{ fontWeight: 700, marginBottom: 8 }}>
+                        {comp.name}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 22,
+                          fontWeight: 800,
+                          color:
+                            meterMode === "volt" ? "#38bdf8" : "#f59e0b",
+                          fontVariantNumeric: "tabular-nums",
+                        }}
+                      >
+                        {meterMode === "volt"
+                          ? `${voltage.toFixed(2)} V`
+                          : `${current.toFixed(4)} A`}
+                      </div>
+                      <div
+                        style={{
+                          marginTop: 8,
+                          fontSize: 12,
+                          opacity: 0.75,
+                          display: "grid",
+                          gap: 2,
+                        }}
+                      >
+                        <span>V: {voltage.toFixed(2)} V</span>
+                        <span>I: {current.toFixed(4)} A</span>
+                        <span>P: {power.toFixed(2)} W</span>
+                        <span>
+                          Circuito:{" "}
+                          {simulation?.energized ? "energizado" : "desligado"}
+                        </span>
+                      </div>
+                    </>
+                  );
+                })()}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMeterMode(null);
+                    setMeterTargetId(null);
+                    setMessage("Multímetro desligado.");
+                  }}
+                  style={{
+                    marginTop: 10,
+                    width: "100%",
+                    padding: "6px 8px",
+                    borderRadius: 8,
+                    border: "1px solid var(--border, #1e293b)",
+                    background: "transparent",
+                    color: "#94a3b8",
+                    cursor: "pointer",
+                    fontSize: 12,
+                  }}
+                >
+                  Fechar
+                </button>
+              </div>
+            )}
 
             {/* ==================================================
                 COMPONENTES
@@ -5282,13 +6217,29 @@ export default function Laboratory() {
               if (
                 overloadedItems.length === 0 &&
                 trippedDevices.length === 0 &&
-                heatingIds.length === 0
+                heatingIds.length === 0 &&
+                !isShort
               ) {
                 return null;
               }
 
               return (
-                <div className="overload-alert-banner" role="alert">
+                <div
+                  className={
+                    "overload-alert-banner" +
+                    (isShort ? " is-short" : "")
+                  }
+                  role="alert"
+                >
+                  {isShort && (
+                    <>
+                      <strong>⚡ CURTO-CIRCUITO DETECTADO</strong>
+                      <p style={{ margin: "6px 0 0", fontSize: 13 }}>
+                        {simulation?.shortReason ||
+                          "Os polos da fonte estão conectados sem resistência adequada. Desconecte o fio em curto ou adicione carga/resistor."}
+                      </p>
+                    </>
+                  )}
                   {overloadedItems.length > 0 && (
                     <>
                       <strong>

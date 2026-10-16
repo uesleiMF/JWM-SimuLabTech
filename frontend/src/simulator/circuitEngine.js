@@ -1859,6 +1859,68 @@ export function getReactiveAnalysis(
    SIMULAR CIRCUITO
 ================================================== */
 
+
+/* ==================================================
+   DETECÇÃO DE CURTO-CIRCUITO
+================================================== */
+
+/**
+ * Detecta curto quando há caminho elétrico entre os polos
+ * da fonte com resistência efetiva muito baixa (< 0.05 Ω)
+ * ou caminho direto sem carga/resistência significativa.
+ */
+export function detectShortCircuit(circuit, resistance) {
+  const source = getSource(circuit);
+  if (!source || !isSourceEnabled(source)) {
+    return { isShort: false, reason: null };
+  }
+
+  const voltage = Number(source.value) || 0;
+  if (voltage <= 0) {
+    return { isShort: false, reason: null };
+  }
+
+  const R = Number(resistance);
+  // Resistência muito baixa com circuito fechado = curto
+  if (Number.isFinite(R) && R > 0 && R < 0.05) {
+    return {
+      isShort: true,
+      reason: `Curto-circuito: resistência efetiva ~${R.toFixed(3)} Ω (limite < 0,05 Ω)`,
+    };
+  }
+
+  // Caminho direto entre polos (sem passar por carga com R significativa)
+  try {
+    const graph = buildCircuitGraph(circuit);
+    const pos = createNodeKey(source.id, "positive");
+    const neg = createNodeKey(source.id, "negative");
+    if (hasPath(graph, pos, neg)) {
+      const loads = getLoads(circuit).filter((l) => isLoadEnergized(circuit, l));
+      const hasResistor = (circuit.components || []).some(
+        (c) =>
+          c?.type === COMPONENT_TYPES.RESISTOR &&
+          Number(c.value) > 0.05
+      );
+      // Se há caminho e nenhuma carga energizada e nenhum resistor significativo
+      if (loads.length === 0 && !hasResistor) {
+        // Pode ser só interruptor fechado ligando + e - via fios
+        // Verifica se resistance calculada é absurda
+        if (!Number.isFinite(R) || R < 0.5) {
+          return {
+            isShort: true,
+            reason:
+              "Curto-circuito: polos da fonte conectados sem carga/resistência adequada",
+          };
+        }
+      }
+    }
+  } catch {
+    /* ignore graph errors */
+  }
+
+  return { isShort: false, reason: null };
+}
+
 export function simulateCircuit(circuit) {
   const source = getSource(circuit);
 
@@ -1876,6 +1938,8 @@ export function simulateCircuit(circuit) {
 
       status: "incompleto",
 
+      shortCircuit: false,
+
       voltage: 0,
 
       current: 0,
@@ -1887,6 +1951,8 @@ export function simulateCircuit(circuit) {
       loads: {},
 
       energizedLoadIds: [],
+
+      warnings: ["Circuito incompleto: conecte fonte e pelo menos uma carga."],
 
       protections: {
         trips: [],
@@ -1934,12 +2000,19 @@ export function simulateCircuit(circuit) {
   const resistance = getEffectiveResistance(circuit);
 
   /* ==========================================
+     CURTO-CIRCUITO
+  ========================================== */
+
+  const shortInfo = detectShortCircuit(circuit, resistance);
+
+  /* ==========================================
      ENERGIZAÇÃO
   ========================================== */
 
   const energized =
     voltage > 0 &&
-    anyLoadOn;
+    anyLoadOn &&
+    !shortInfo.isShort;
 
   /* ==========================================
      CIRCUITO ABERTO
@@ -1952,6 +2025,8 @@ export function simulateCircuit(circuit) {
       energized: false,
 
       status: "aberto",
+
+      shortCircuit: false,
 
       voltage: roundValue(voltage, 2),
 
@@ -1967,6 +2042,8 @@ export function simulateCircuit(circuit) {
       loads: loadStates,
 
       energizedLoadIds: [],
+
+      warnings: [],
 
       protections: {
         trips: [],
@@ -1985,6 +2062,35 @@ export function simulateCircuit(circuit) {
         voltage,
         0
       ),
+    };
+  }
+
+  /* ==========================================
+     CURTO: interrompe simulação normal
+  ========================================== */
+
+  if (shortInfo.isShort) {
+    return {
+      complete: true,
+      energized: false,
+      status: "curto",
+      shortCircuit: true,
+      shortReason: shortInfo.reason,
+      voltage: roundValue(voltage, 2),
+      current: 0,
+      resistance: roundValue(Number.isFinite(resistance) ? resistance : 0, 4),
+      power: 0,
+      loads: loadStates,
+      energizedLoadIds: [],
+      protections: {
+        trips: [],
+        thermalPending: [],
+        shortCircuit: true,
+        shortReason: shortInfo.reason,
+      },
+      coils: getCoilStates(circuit),
+      warnings: [shortInfo.reason],
+      reactive: getReactiveAnalysis(circuit, resistance || 0, 0, voltage, 0),
     };
   }
 
@@ -2145,12 +2251,27 @@ export function simulateCircuit(circuit) {
      RESULTADO FINAL
   ========================================== */
 
+  // Coleta avisos de sobrecarga
+  const warnings = [];
+  Object.values(loadStates).forEach((ls) => {
+    if (ls?.overloaded && Array.isArray(ls.overloadReasons)) {
+      ls.overloadReasons.forEach((r) => warnings.push(r));
+    }
+  });
+  if (Array.isArray(protections?.trips)) {
+    protections.trips.forEach((t) => {
+      if (t?.reason) warnings.push(t.reason);
+    });
+  }
+
   return {
     complete: true,
 
     energized: true,
 
     status: "ligado",
+
+    shortCircuit: false,
 
     voltage: roundValue(voltage, 2),
 
@@ -2177,6 +2298,8 @@ export function simulateCircuit(circuit) {
     protections,
 
     coils: coilStates,
+
+    warnings,
 
     reactive: getReactiveAnalysis(
       circuit,

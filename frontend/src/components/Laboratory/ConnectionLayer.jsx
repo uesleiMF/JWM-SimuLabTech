@@ -22,8 +22,8 @@ CAMADA VISUAL DE CONEXÕES ELÉTRICAS
 */
 
 const COMPONENT_SIZES = {
-  blocos: { w: 92, h: 76 },
-  esquema: { w: 72, h: 56 },
+  blocos: { w: 78, h: 70 },
+  esquema: { w: 96, h: 78 },
   "3d": { w: 110, h: 96 },
 };
 

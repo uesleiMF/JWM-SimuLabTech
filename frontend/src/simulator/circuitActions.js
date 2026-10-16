@@ -458,8 +458,8 @@ export function addComponent(
     enabled: true,
 
     position: {
-      x: defaultPosition.x + (offset % 200),
-      y: defaultPosition.y + Math.floor(offset / 8),
+      x: Math.round((defaultPosition.x + (offset % 200)) / 20) * 20,
+      y: Math.round((defaultPosition.y + Math.floor(offset / 8)) / 20) * 20,
     },
   };
 

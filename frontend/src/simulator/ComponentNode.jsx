@@ -12,6 +12,7 @@ import {
 
 import { COMPONENT_TYPES } from "./components/componentTypes";
 import { getComponentTerminals } from "./connections/connectionUtils";
+import { ComponentFigure } from "./components/ComponentFigures";
 
 /* ==================================================
    ÍCONES DOS COMPONENTES
@@ -1014,7 +1015,16 @@ export default function ComponentNode({
             running={motorRunning}
           />
         ) : (
-          <Icon size={18} />
+          <ComponentFigure
+            type={component.type}
+            size={
+              component.type === "resistor" ? 48 : 40
+            }
+            energized={energized}
+            switchOn={switchOn}
+            running={motorRunning}
+            value={component.value}
+          />
         )}
       </span>
 

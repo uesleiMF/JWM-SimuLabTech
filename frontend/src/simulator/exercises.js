@@ -174,7 +174,7 @@ export const EXERCISES = [
     id: "ex-fuse-protection",
     title: "Proteção por fusível",
     description:
-      "Inclua Seccionador FU no circuito de uma carga. Ajuste a corrente de atuação baixa e provoque a queima do fusível.",
+      "Inclua o Fusível no circuito de uma carga. Ajuste a corrente de atuação baixa e provoque a queima do fusível.",
     difficulty: "Médio",
     points: 160,
     requiredTypes: [
@@ -214,7 +214,177 @@ export const EXERCISES = [
       ],
     },
   },
+
+  {
+    id: "ex-partida-direta",
+    title: "Partida direta de motor",
+    description:
+      "Monte partida direta: Fonte, Botoeira NA (partida), Contator e Motor. Ao pressionar a botoeira, a bobina do contator energiza e o motor parte. (Ideal: use o contato auxiliar do contator como selo para manter ligado.)",
+    difficulty: "Difícil",
+    points: 250,
+    requiredTypes: [
+      COMPONENT_TYPES.SOURCE,
+      COMPONENT_TYPES.PUSH_BUTTON_NO,
+      COMPONENT_TYPES.CONTACTOR,
+      COMPONENT_TYPES.MOTOR,
+    ],
+    rules: {
+      mustHaveClosedCircuit: true,
+      mustEnergizeTypes: [COMPONENT_TYPES.MOTOR],
+      controlMustBeClosed: true,
+    },
+  },
+  {
+    id: "ex-comando-sinalizador",
+    title: "Contator com sinalizador",
+    description:
+      "Monte Fonte, Botoeira NA, Contator e Sinalizador. Ao energizar a bobina do contator, o sinalizador deve acender indicando comando ativo.",
+    difficulty: "Médio",
+    points: 180,
+    requiredTypes: [
+      COMPONENT_TYPES.SOURCE,
+      COMPONENT_TYPES.PUSH_BUTTON_NO,
+      COMPONENT_TYPES.CONTACTOR,
+      COMPONENT_TYPES.INDICATOR,
+    ],
+    rules: {
+      mustHaveClosedCircuit: true,
+      mustEnergizeTypes: [COMPONENT_TYPES.INDICATOR],
+      controlMustBeClosed: true,
+    },
+  },
+  {
+    id: "ex-protecao-disjuntor",
+    title: "Motor protegido por disjuntor",
+    description:
+      "Monte Fonte, Disjuntor e Motor. O disjuntor deve estar fechado e o motor energizado. Ajuste a corrente de atuação do disjuntor conforme o motor.",
+    difficulty: "Médio",
+    points: 160,
+    requiredTypes: [
+      COMPONENT_TYPES.SOURCE,
+      COMPONENT_TYPES.BREAKER,
+      COMPONENT_TYPES.MOTOR,
+    ],
+    rules: {
+      mustHaveClosedCircuit: true,
+      mustEnergizeTypes: [COMPONENT_TYPES.MOTOR],
+      controlMustBeClosed: true,
+    },
+  },
+  {
+    id: "ex-fusivel-carga",
+    title: "Carga protegida por fusível",
+    description:
+      "Monte Fonte, Fusível e Lâmpada (ou Motor). Com o fusível íntegro, a carga deve energizar. Se a corrente ultrapassar o limite, o fusível queima.",
+    difficulty: "Médio",
+    points: 170,
+    requiredTypes: [
+      COMPONENT_TYPES.SOURCE,
+      COMPONENT_TYPES.FUSE_ISOLATOR,
+    ],
+    rules: {
+      mustHaveClosedCircuit: true,
+      mustEnergizeAnyLoad: true,
+      requireOneOfTypes: [
+        COMPONENT_TYPES.LAMP,
+        COMPONENT_TYPES.MOTOR,
+        COMPONENT_TYPES.LED,
+        COMPONENT_TYPES.INDICATOR,
+      ],
+      controlMustBeClosed: true,
+    },
+  },
+  {
+    id: "ex-botoeira-nf-parada",
+    title: "Parada com botoeira NF",
+    description:
+      "Monte um circuito com Fonte, Botoeira NF e Lâmpada/Sinalizador. A botoeira NF começa fechada (carga ligada). Ao acionar a NF, o circuito abre e a carga desliga.",
+    difficulty: "Médio",
+    points: 150,
+    requiredTypes: [
+      COMPONENT_TYPES.SOURCE,
+      COMPONENT_TYPES.PUSH_BUTTON_NC,
+    ],
+    rules: {
+      mustHaveClosedCircuit: true,
+      mustEnergizeAnyLoad: true,
+      requireOneOfTypes: [
+        COMPONENT_TYPES.LAMP,
+        COMPONENT_TYPES.INDICATOR,
+        COMPONENT_TYPES.LED,
+      ],
+    },
+  },
+  {
+    id: "ex-partida-com-fusivel",
+    title: "Partida direta com fusível",
+    description:
+      "Partida direta completa: Fonte, Fusível, Botoeira NA, Contator e Motor. O fusível protege a linha; o contator comanda o motor.",
+    difficulty: "Difícil",
+    points: 280,
+    requiredTypes: [
+      COMPONENT_TYPES.SOURCE,
+      COMPONENT_TYPES.FUSE_ISOLATOR,
+      COMPONENT_TYPES.PUSH_BUTTON_NO,
+      COMPONENT_TYPES.CONTACTOR,
+      COMPONENT_TYPES.MOTOR,
+    ],
+    rules: {
+      mustHaveClosedCircuit: true,
+      mustEnergizeTypes: [COMPONENT_TYPES.MOTOR],
+      controlMustBeClosed: true,
+    },
+  },
+
+
+  {
+    id: "ex-reversao-marcha",
+    title: "Reversão de marcha",
+    description:
+      "Monte um circuito de reversão: Fonte, duas Botoeiras NA (sentido horário e anti-horário), dois Contatores e um Motor. Cada contator comanda um sentido. (Intertravamento elétrico entre contatores é o ideal.)",
+    difficulty: "Difícil",
+    points: 300,
+    requiredTypes: [
+      COMPONENT_TYPES.SOURCE,
+      COMPONENT_TYPES.PUSH_BUTTON_NO,
+      COMPONENT_TYPES.CONTACTOR,
+      COMPONENT_TYPES.MOTOR,
+    ],
+    rules: {
+      mustHaveClosedCircuit: true,
+      mustEnergizeTypes: [COMPONENT_TYPES.MOTOR],
+      controlMustBeClosed: true,
+      minContactorCount: 2,
+      minPushButtonNOCount: 2,
+    },
+  },
+  {
+    id: "ex-estrela-triangulo",
+    title: "Partida estrela-triângulo (conceitual)",
+    description:
+      "Monte a base de uma partida estrela-triângulo: Fonte, Botoeira NA, três Contatores (principal, estrela e triângulo), Temporizador TON e Motor. Energize o motor via contator principal. (Modelo educativo — o chaveamento Y-Δ completo depende da topologia trifásica.)",
+    difficulty: "Difícil",
+    points: 320,
+    requiredTypes: [
+      COMPONENT_TYPES.SOURCE,
+      COMPONENT_TYPES.PUSH_BUTTON_NO,
+      COMPONENT_TYPES.CONTACTOR,
+      COMPONENT_TYPES.TIMER_ON_DELAY,
+      COMPONENT_TYPES.MOTOR,
+    ],
+    rules: {
+      mustHaveClosedCircuit: true,
+      mustEnergizeTypes: [COMPONENT_TYPES.MOTOR],
+      controlMustBeClosed: true,
+      minContactorCount: 3,
+    },
+  },
+
 ];
+
+
+
+
 
 export function getExerciseById(id) {
   return EXERCISES.find((ex) => ex.id === id) || null;
@@ -372,15 +542,45 @@ export function validateExercise(circuit, exerciseId) {
     });
   }
 
-  // 7. Fonte presente
+  // 7. Quantidade mínima de contatores
+  if (exercise.rules?.minContactorCount) {
+    const n = getByType(circuit, COMPONENT_TYPES.CONTACTOR).length;
+    const need = exercise.rules.minContactorCount;
+    checks.push({
+      id: "min-contactors",
+      label: `Pelo menos ${need} contator(es)`,
+      passed: n >= need,
+      detail:
+        n >= need
+          ? `${n} contator(es) no quadro.`
+          : `Há ${n}; adicione mais contator(es).`,
+    });
+  }
+
+  // 8. Quantidade mínima de botoeiras NA
+  if (exercise.rules?.minPushButtonNOCount) {
+    const n = getByType(circuit, COMPONENT_TYPES.PUSH_BUTTON_NO).length;
+    const need = exercise.rules.minPushButtonNOCount;
+    checks.push({
+      id: "min-pb-no",
+      label: `Pelo menos ${need} botoeira(s) NA`,
+      passed: n >= need,
+      detail:
+        n >= need
+          ? `${n} botoeira(s) NA no quadro.`
+          : `Há ${n}; adicione mais botoeira(s) NA.`,
+    });
+  }
+
+  // 9. Fonte presente
   const source = getSource(circuit);
   checks.push({
     id: "has-source",
-    label: "Fonte DC presente",
+    label: "Fonte presente",
     passed: Boolean(source),
     detail: source
       ? `Fonte de ${source.value}${source.unit || "V"}.`
-      : "Adicione uma Fonte DC.",
+      : "Adicione uma Fonte.",
   });
 
   const passedCount = checks.filter((c) => c.passed).length;
