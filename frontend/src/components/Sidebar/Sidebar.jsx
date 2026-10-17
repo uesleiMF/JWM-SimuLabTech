@@ -14,7 +14,10 @@ import {
   Zap,
   Settings,
   X,
+  GraduationCap,
 } from "lucide-react";
+
+import { useAuth } from "../../contexts/AuthContext";
 
 import "./Sidebar.css";
 
@@ -58,6 +61,14 @@ const mainMenu = [
     label: "Certificados",
     path: "/app/certificados",
     icon: Award,
+  },
+];
+
+const teacherMenu = [
+  {
+    label: "Painel Professor",
+    path: "/app/professor",
+    icon: GraduationCap,
   },
 ];
 
@@ -107,6 +118,16 @@ const supportMenu = [
 ];
 
 export default function Sidebar({ mobileOpen, onClose }) {
+  const { user } = useAuth();
+  const displayName = user?.name || "Estudante";
+  const displayEmail = user?.email || "Aluno JWM";
+  const avatar =
+    user?.avatar ||
+    displayName
+      .split(" ")
+      .slice(0, 2)
+      .map((p) => (p[0] || "").toUpperCase())
+      .join("");
   return (
     <>
       {mobileOpen && (
@@ -163,6 +184,28 @@ export default function Sidebar({ mobileOpen, onClose }) {
             })}
           </nav>
 
+          {(user?.role === "teacher" || user?.role === "admin") && (
+            <nav className="sidebar-section">
+              <span className="sidebar-title">PROFESSOR</span>
+              {teacherMenu.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    onClick={onClose}
+                    className={({ isActive }) =>
+                      `sidebar-link ${isActive ? "active" : ""}`
+                    }
+                  >
+                    <Icon size={19} />
+                    <span>{item.label}</span>
+                  </NavLink>
+                );
+              })}
+            </nav>
+          )}
+
           <nav className="sidebar-section">
             <span className="sidebar-title">MÓDULOS</span>
 
@@ -205,11 +248,11 @@ export default function Sidebar({ mobileOpen, onClose }) {
         </div>
 
         <div className="sidebar-user">
-          <div className="user-avatar">JU</div>
+          <div className="user-avatar">{avatar}</div>
 
           <div className="user-info">
-            <strong>Estudante</strong>
-            <span>Aluno JWM</span>
+            <strong>{displayName}</strong>
+            <span>{displayEmail}</span>
           </div>
 
           <NavLink

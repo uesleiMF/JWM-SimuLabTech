@@ -40,6 +40,9 @@ import {
   RotateCw,
   History,
   Gauge,
+  ChevronDown,
+  Wrench,
+  MoreHorizontal,
 } from "lucide-react";
 
 import "./Laboratory.css";
@@ -69,9 +72,18 @@ import {
   EXERCISES,
   getExerciseById,
   validateExercise,
+  registerRemoteExercise,
 } from "../../simulator/exercises";
 
 import { recordExerciseCompletion } from "../../services/progressService";
+import {
+  getToken,
+  saveRemoteCircuit,
+  listRemoteCircuits,
+  getRemoteCircuit,
+  submitExerciseResult,
+  getActivity,
+} from "../../services/api";
 
 import { createInitialCircuit } from "./hooks/useLaboratory";
 
@@ -208,13 +220,68 @@ export default function Laboratory() {
   const activeExerciseId =
     searchParams.get("exercicio") || null;
 
+  const [remoteExerciseTick, setRemoteExerciseTick] = useState(0);
+
   const activeExercise = useMemo(
     () =>
       activeExerciseId
         ? getExerciseById(activeExerciseId)
         : null,
-    [activeExerciseId]
+    [activeExerciseId, remoteExerciseTick]
   );
+
+  // Carrega atividade da API se não estiver nos exercícios locais
+  useEffect(() => {
+    if (!activeExerciseId || getExerciseById(activeExerciseId)) return;
+    if (!getToken()) return;
+    let cancelled = false;
+    getActivity(activeExerciseId)
+      .then((data) => {
+        if (cancelled || !data?.id) return;
+        registerRemoteExercise(data);
+        setRemoteExerciseTick((t) => t + 1);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [activeExerciseId]);
+
+  // Preview: professor abriu circuito do aluno
+  useEffect(() => {
+    if (searchParams.get("preview") !== "1") return;
+    try {
+      const raw = sessionStorage.getItem("jwm_teacher_preview_circuit");
+      if (!raw) return;
+      const payload = JSON.parse(raw);
+      sessionStorage.removeItem("jwm_teacher_preview_circuit");
+      const source = payload?.circuit || payload;
+      if (!source || !Array.isArray(source.components)) {
+        setMessage("Circuito de preview inválido.");
+        return;
+      }
+      const loaded = {
+        id: source.id || `preview-${Date.now()}`,
+        name:
+          (payload.studentName
+            ? `[Aluno: ${payload.studentName}] `
+            : "[Preview] ") + (source.name || "Circuito"),
+        description: source.description || payload.studentName || "",
+        components: source.components || [],
+        wires: source.wires || [],
+        selectedComponent: null,
+        selectedWire: null,
+      };
+      setCircuit(loaded);
+      setMessage(
+        payload.studentName
+          ? `Visualizando circuito de ${payload.studentName} (somente leitura sugerida).`
+          : "Circuito carregado para visualização."
+      );
+    } catch (err) {
+      console.warn("[JWM] preview circuit:", err);
+    }
+  }, [searchParams]);
 
   const [validationResult, setValidationResult] =
     useState(null);
@@ -251,6 +318,28 @@ export default function Laboratory() {
   });
 
   const [showRecent, setShowRecent] = useState(false);
+
+  /* Circuitos salvos na API (nuvem) */
+  const [cloudCircuits, setCloudCircuits] = useState([]);
+  const [showCloud, setShowCloud] = useState(false);
+  const [cloudLoading, setCloudLoading] = useState(false);
+
+  /* Menus em cascata do header (arquivo / ferramentas) */
+  const [openMenu, setOpenMenu] = useState(null); // null | 'arquivo' | 'ferramentas'
+
+  const toggleMenu = (id) => {
+    setOpenMenu((cur) => (cur === id ? null : id));
+    if (id !== "arquivo") {
+      setShowRecent(false);
+      setShowCloud(false);
+    }
+  };
+
+  const closeAllMenus = () => {
+    setOpenMenu(null);
+    setShowRecent(false);
+    setShowCloud(false);
+  };
 
   /*
    * Converte coordenada da tela → espaço local do quadro.
@@ -1254,11 +1343,15 @@ export default function Laboratory() {
     setMessage(result.message);
 
     if (result.ok && result.exercise) {
-      recordExerciseCompletion({
+      const payload = {
         id: result.exercise.id,
         title: result.exercise.title,
         score: result.score,
         points: result.exercise.points || 0,
+      };
+      // Local + remoto (api.js já faz fallback local se offline)
+      submitExerciseResult(payload).catch(() => {
+        recordExerciseCompletion(payload);
       });
     }
   };
@@ -1440,6 +1533,71 @@ export default function Laboratory() {
     setMessage("Lista de circuitos recentes limpa.");
   };
 
+  /* ---------- Circuitos na nuvem (API) ---------- */
+
+  const handleFetchCloudCircuits = async () => {
+    if (!getToken()) {
+      setMessage("Faça login para ver circuitos salvos na nuvem.");
+      setShowCloud(true);
+      setCloudCircuits([]);
+      return;
+    }
+    setCloudLoading(true);
+    setShowCloud(true);
+    setShowRecent(false);
+    try {
+      const data = await listRemoteCircuits();
+      const list = Array.isArray(data?.circuits) ? data.circuits : [];
+      setCloudCircuits(list);
+      if (list.length === 0) {
+        setMessage("Nenhum circuito na nuvem ainda. Salve um com o botão Salvar.");
+      }
+    } catch (err) {
+      console.warn("[JWM] listRemoteCircuits:", err);
+      setMessage("Não foi possível listar circuitos da nuvem.");
+      setCloudCircuits([]);
+    } finally {
+      setCloudLoading(false);
+    }
+  };
+
+  const handleOpenCloudCircuit = async (item) => {
+    if (!item?.id) return;
+    try {
+      setMessage("Carregando circuito da nuvem…");
+      const remote = await getRemoteCircuit(item.id);
+      const data = remote?.data || remote;
+      const loaded = parseCircuitFile(
+        data?.components ? { circuit: data } : data
+      );
+      if (!loaded) {
+        // tenta usar data direto
+        const fallback = parseCircuitFile({ circuit: data });
+        if (!fallback) {
+          setMessage("Circuito da nuvem inválido.");
+          return;
+        }
+        applyLoadedCircuit(
+          { ...fallback, remoteId: item.id, name: remote?.name || fallback.name },
+          remote?.name || "nuvem"
+        );
+      } else {
+        applyLoadedCircuit(
+          {
+            ...loaded,
+            remoteId: item.id,
+            name: remote?.name || loaded.name,
+          },
+          remote?.name || "nuvem"
+        );
+      }
+      setShowCloud(false);
+    } catch (err) {
+      console.warn("[JWM] getRemoteCircuit:", err);
+      setMessage("Erro ao abrir circuito da nuvem.");
+    }
+  };
+
   const applyLoadedCircuit = (loaded, sourceLabel, options = {}) => {
     if (!loaded) return false;
 
@@ -1562,8 +1720,8 @@ export default function Laboratory() {
     return () => clearTimeout(timer);
   }, [circuit]);
 
-  const handleSaveCircuit = () => {
-    console.log("[JWM] Salvar clicado — download + localStorage");
+  const handleSaveCircuit = async () => {
+    console.log("[JWM] Salvar clicado — download + localStorage + API");
     try {
       const currentName = circuit?.name || "Novo Circuito";
       const typed = window.prompt(
@@ -1614,6 +1772,7 @@ export default function Laboratory() {
 
       pushRecentCircuit(payload);
 
+      // Download .json (comportamento atual)
       const blob = new Blob([json], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const stamp = new Date()
@@ -1646,6 +1805,34 @@ export default function Laboratory() {
       }, 200);
 
       console.log("[JWM] Download disparado:", fileName);
+
+      // Salva na API se estiver logado
+      let cloudMsg = "";
+      if (getToken()) {
+        try {
+          const remoteId = circuit?.remoteId || null;
+          const saved = await saveRemoteCircuit(
+            {
+              name: circuitName,
+              description: payload.circuit.description || "",
+              data: payload.circuit,
+            },
+            remoteId
+          );
+          if (saved?.id) {
+            setCircuit((current) => ({
+              ...current,
+              name: circuitName,
+              remoteId: saved.id,
+            }));
+            cloudMsg = " + nuvem";
+          }
+        } catch (apiErr) {
+          console.warn("[JWM] Falha ao salvar na API:", apiErr);
+          cloudMsg = " (nuvem offline)";
+        }
+      }
+
       setMessage(
         'Circuito "' +
           circuitName +
@@ -1655,7 +1842,9 @@ export default function Laboratory() {
           nComp +
           " comp, " +
           nWire +
-          " fios)."
+          " fios)" +
+          cloudMsg +
+          "."
       );
     } catch (err) {
       console.error("Salvar circuito:", err);
@@ -4040,6 +4229,7 @@ export default function Laboratory() {
 
         <div className="laboratory-header-actions">
 
+          {/* Ações principais sempre visíveis */}
           <button
             type="button"
             className="laboratory-action-button"
@@ -4048,90 +4238,36 @@ export default function Laboratory() {
             disabled={historyIndex <= 0}
           >
             <Undo2 size={18} />
-            Desfazer
+            <span className="lab-btn-label">Desfazer</span>
           </button>
 
           <button
             type="button"
             className="laboratory-action-button"
-            onClick={handleResetProtections}
-            title="Rearmar todos os disjuntores, fusíveis e relés térmicos"
-          >
-            <RotateCcw size={18} />
-            Rearmar
-          </button>
-
-          <button
-            type="button"
-            className={
-              "laboratory-action-button" +
-              (snapEnabled ? " is-active-tool" : "")
-            }
             onClick={() => {
-              setSnapEnabled((v) => !v);
-              setMessage(
-                !snapEnabled
-                  ? "Snap to grid ATIVADO (20 px)."
-                  : "Snap to grid desativado."
-              );
+              closeAllMenus();
+              handleSaveCircuit();
             }}
-            title="Alinhar componentes e pontos de fio à grade"
-          >
-            <LayoutGrid size={18} />
-            {snapEnabled ? "Snap ON" : "Snap OFF"}
-          </button>
-
-          <button
-            type="button"
-            className={
-              "laboratory-action-button" +
-              (meterMode === "volt" ? " is-active-tool" : "")
-            }
-            onClick={() => {
-              setMeterMode((m) => (m === "volt" ? null : "volt"));
-              setMessage(
-                meterMode === "volt"
-                  ? "Multímetro desligado."
-                  : "Voltímetro ativo: clique em um componente para medir tensão."
-              );
-            }}
-            title="Voltímetro — clique em um componente"
-          >
-            <Gauge size={18} />
-            V
-          </button>
-
-          <button
-            type="button"
-            className={
-              "laboratory-action-button" +
-              (meterMode === "amp" ? " is-active-tool" : "")
-            }
-            onClick={() => {
-              setMeterMode((m) => (m === "amp" ? null : "amp"));
-              setMessage(
-                meterMode === "amp"
-                  ? "Multímetro desligado."
-                  : "Amperímetro ativo: clique em um componente para medir corrente."
-              );
-            }}
-            title="Amperímetro — clique em um componente"
-          >
-            <Activity size={18} />
-            A
-          </button>
-
-          <button
-            type="button"
-            className="laboratory-action-button"
-            onClick={handleSaveCircuit}
-            title="Salvar circuito no computador (.json) — você pode nomear antes de baixar"
+            title="Salvar circuito (.json + nuvem se logado)"
           >
             <Save size={18} />
-            Salvar
+            <span className="lab-btn-label">Salvar</span>
           </button>
 
-          {/* Label nativo + input: forma mais confiável de abrir arquivo no browser */}
+          <button
+            type="button"
+            className="laboratory-action-button laboratory-validate-button"
+            onClick={() => {
+              closeAllMenus();
+              handleValidateExercise();
+            }}
+            title="Validar exercício"
+          >
+            <ClipboardCheck size={18} />
+            <span className="lab-btn-label">Validar</span>
+          </button>
+
+          {/* Input oculto para abrir arquivo */}
           <input
             ref={fileInputRef}
             id="jwm-circuit-file-input"
@@ -4150,263 +4286,315 @@ export default function Laboratory() {
               border: 0,
             }}
           />
-          <label
-            htmlFor="jwm-circuit-file-input"
-            className="laboratory-action-button"
-            onClick={handleOpenCircuit}
-            title="Abrir arquivo .json salvo. Segure Shift e clique para reabrir o último salvo no navegador."
-            style={{ cursor: "pointer" }}
-          >
-            <FolderOpen size={18} />
-            Abrir
-          </label>
 
-          <div style={{ position: "relative" }}>
+          {/* ===== Menu Arquivo ===== */}
+          <div className="lab-cascade" style={{ position: "relative" }}>
             <button
               type="button"
-              className="laboratory-action-button"
-              onClick={() => setShowRecent((v) => !v)}
-              title="Circuitos salvos recentemente neste navegador"
+              className={
+                "laboratory-action-button" +
+                (openMenu === "arquivo" ? " is-active-tool" : "")
+              }
+              onClick={() => toggleMenu("arquivo")}
+              title="Arquivo — abrir, nuvem, exportar"
             >
-              <History size={18} />
-              Recentes
-              {recentCircuits.length > 0 ? (
-                <span
-                  style={{
-                    marginLeft: 2,
-                    fontSize: 11,
-                    opacity: 0.85,
-                  }}
-                >
-                  ({recentCircuits.length})
-                </span>
-              ) : null}
+              <FolderOpen size={18} />
+              <span className="lab-btn-label">Arquivo</span>
+              <ChevronDown size={14} />
             </button>
 
-            {showRecent ? (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "calc(100% + 6px)",
-                  right: 0,
-                  zIndex: 50,
-                  width: "320px",
-                  maxHeight: "360px",
-                  overflowY: "auto",
-                  borderRadius: "12px",
-                  border: "1px solid var(--border, #1e293b)",
-                  background: "var(--bg-panel, #0f172a)",
-                  boxShadow: "0 12px 40px rgba(0,0,0,0.45)",
-                  padding: "8px",
-                }}
-              >
+            {openMenu === "arquivo" ? (
+              <div className="lab-cascade-panel">
+                <label
+                  htmlFor="jwm-circuit-file-input"
+                  className="lab-cascade-item"
+                  onClick={(e) => {
+                    handleOpenCircuit(e);
+                    setOpenMenu(null);
+                  }}
+                  title="Abrir arquivo .json"
+                >
+                  <FolderOpen size={16} />
+                  Abrir arquivo…
+                </label>
+
                 <button
                   type="button"
+                  className="lab-cascade-item"
                   onClick={() => {
-                    handleRestoreLastSaved();
-                    setShowRecent(false);
-                  }}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "10px 12px",
-                    marginBottom: "6px",
-                    borderRadius: "8px",
-                    border: "1px solid var(--border-focus, #3b82f6)",
-                    background: "var(--primary-soft, rgba(59,130,246,0.15))",
-                    color: "var(--text-primary, #e2e8f0)",
-                    cursor: "pointer",
-                    fontWeight: 600,
-                    fontSize: "13px",
+                    handleFetchCloudCircuits();
+                    setOpenMenu(null);
+                    setShowCloud(true);
                   }}
                 >
-                  ↩ Restaurar último auto-salvo
+                  <Boxes size={16} />
+                  Nuvem
+                  {cloudCircuits.length > 0
+                    ? ` (${cloudCircuits.length})`
+                    : ""}
                 </button>
-                {recentCircuits.length === 0 ? (
-                  <div
-                    style={{
-                      padding: "14px 12px",
-                      fontSize: "13px",
-                      color: "var(--text-secondary, #94a3b8)",
-                    }}
-                  >
-                    Nenhum circuito recente. Salve um circuito para aparecer aqui.
-                  </div>
-                ) : (
-                  recentCircuits.map((item) => (
-                    <div
-                      key={item.id + (item.savedAt || "")}
-                      style={{
-                        display: "flex",
-                        alignItems: "stretch",
-                        marginBottom: "4px",
-                        borderRadius: "8px",
-                        border: "1px solid transparent",
-                      }}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => handleOpenRecent(item)}
-                        style={{
-                          flex: 1,
-                          textAlign: "left",
-                          padding: "10px 12px",
-                          borderRadius: "8px 0 0 8px",
-                          border: "none",
-                          background: "transparent",
-                          color: "var(--text-primary, #e2e8f0)",
-                          cursor: "pointer",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.parentElement.style.background =
-                            "var(--bg-panel-2, #1a2332)";
-                          e.currentTarget.parentElement.style.borderColor =
-                            "var(--border-focus, #3b82f6)";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.parentElement.style.background =
-                            "transparent";
-                          e.currentTarget.parentElement.style.borderColor =
-                            "transparent";
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontWeight: 700,
-                            fontSize: "13px",
-                            marginBottom: 2,
-                          }}
-                        >
-                          {item.name || "Sem nome"}
-                        </div>
-                        <div
-                          style={{
-                            fontSize: "11px",
-                            color: "var(--text-secondary, #94a3b8)",
-                          }}
-                        >
-                          {(item.componentCount || 0) +
-                            " comp · " +
-                            (item.wireCount || 0) +
-                            " fios"}
-                          {item.savedAt
-                            ? " · " +
-                              new Date(item.savedAt).toLocaleString("pt-BR")
-                            : ""}
-                        </div>
-                        {item.description ? (
-                          <div
-                            style={{
-                              fontSize: "11px",
-                              color: "var(--text-secondary, #94a3b8)",
-                              marginTop: 4,
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {item.description}
-                          </div>
-                        ) : null}
-                      </button>
-                      <button
-                        type="button"
-                        title="Remover dos recentes"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRemoveRecent(item.id);
-                        }}
-                        style={{
-                          width: 36,
-                          border: "none",
-                          borderRadius: "0 8px 8px 0",
-                          background: "transparent",
-                          color: "var(--text-muted, #64748b)",
-                          cursor: "pointer",
-                          fontSize: 16,
-                          lineHeight: 1,
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.color = "#ef4444";
-                          e.currentTarget.style.background =
-                            "rgba(239,68,68,0.12)";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.color =
-                            "var(--text-muted, #64748b)";
-                          e.currentTarget.style.background = "transparent";
-                        }}
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))
-                )}
 
-                {recentCircuits.length > 0 ? (
-                  <button
-                    type="button"
-                    onClick={handleClearRecent}
-                    style={{
-                      display: "block",
-                      width: "100%",
-                      marginTop: "6px",
-                      padding: "8px 12px",
-                      borderRadius: "8px",
-                      border: "1px solid var(--border, #1e293b)",
-                      background: "transparent",
-                      color: "var(--text-secondary, #94a3b8)",
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
-                  >
-                    Limpar lista
-                  </button>
-                ) : null}
+                <button
+                  type="button"
+                  className="lab-cascade-item"
+                  onClick={() => {
+                    setShowRecent(true);
+                    setShowCloud(false);
+                    setOpenMenu(null);
+                  }}
+                >
+                  <History size={16} />
+                  Recentes
+                  {recentCircuits.length > 0
+                    ? ` (${recentCircuits.length})`
+                    : ""}
+                </button>
+
+                <div className="lab-cascade-sep" />
+
+                <button
+                  type="button"
+                  className="lab-cascade-item"
+                  onClick={() => {
+                    closeAllMenus();
+                    handleExportPdf();
+                  }}
+                >
+                  <FileDown size={16} />
+                  Exportar PDF
+                </button>
+
+                <button
+                  type="button"
+                  className="lab-cascade-item"
+                  onClick={() => {
+                    closeAllMenus();
+                    handleExportPng();
+                  }}
+                >
+                  <FileDown size={16} />
+                  Exportar PNG
+                </button>
               </div>
             ) : null}
           </div>
 
-          <button
-            type="button"
-            className="laboratory-action-button"
-            onClick={handleExportPdf}
-            title="Exportar circuito em PDF (com nome e descrição)"
-          >
-            <FileDown size={18} />
-            PDF
-          </button>
+          {/* ===== Menu Ferramentas ===== */}
+          <div className="lab-cascade" style={{ position: "relative" }}>
+            <button
+              type="button"
+              className={
+                "laboratory-action-button" +
+                (openMenu === "ferramentas" ? " is-active-tool" : "")
+              }
+              onClick={() => toggleMenu("ferramentas")}
+              title="Ferramentas — rearmar, snap, multímetro"
+            >
+              <Wrench size={18} />
+              <span className="lab-btn-label">Ferramentas</span>
+              <ChevronDown size={14} />
+            </button>
 
-          <button
-            type="button"
-            className="laboratory-action-button"
-            onClick={handleExportPng}
-            title="Exportar diagrama do circuito em PNG"
-          >
-            <FileDown size={18} />
-            PNG
-          </button>
+            {openMenu === "ferramentas" ? (
+              <div className="lab-cascade-panel">
+                <button
+                  type="button"
+                  className="lab-cascade-item"
+                  onClick={() => {
+                    closeAllMenus();
+                    handleResetProtections();
+                  }}
+                >
+                  <RotateCcw size={16} />
+                  Rearmar proteções
+                </button>
 
-          <button
-            type="button"
-            className="laboratory-action-button laboratory-validate-button"
-            onClick={handleValidateExercise}
-            title="Validar exercício"
-          >
-            <ClipboardCheck size={18} />
-            Validar
-          </button>
+                <button
+                  type="button"
+                  className={
+                    "lab-cascade-item" + (snapEnabled ? " is-on" : "")
+                  }
+                  onClick={() => {
+                    setSnapEnabled((v) => !v);
+                    setMessage(
+                      !snapEnabled
+                        ? "Snap to grid ATIVADO (20 px)."
+                        : "Snap to grid desativado."
+                    );
+                  }}
+                >
+                  <LayoutGrid size={16} />
+                  {snapEnabled ? "Snap ON" : "Snap OFF"}
+                </button>
 
-          <button
-            type="button"
-            className="laboratory-reset-button"
-            onClick={handleReset}
-          >
-            <RotateCcw size={18} />
-            Restaurar
-          </button>
+                <div className="lab-cascade-sep" />
+
+                <button
+                  type="button"
+                  className={
+                    "lab-cascade-item" +
+                    (meterMode === "volt" ? " is-on" : "")
+                  }
+                  onClick={() => {
+                    setMeterMode((m) => (m === "volt" ? null : "volt"));
+                    setMessage(
+                      meterMode === "volt"
+                        ? "Multímetro desligado."
+                        : "Voltímetro ativo: clique em um componente."
+                    );
+                  }}
+                >
+                  <Gauge size={16} />
+                  Voltímetro (V)
+                </button>
+
+                <button
+                  type="button"
+                  className={
+                    "lab-cascade-item" +
+                    (meterMode === "amp" ? " is-on" : "")
+                  }
+                  onClick={() => {
+                    setMeterMode((m) => (m === "amp" ? null : "amp"));
+                    setMessage(
+                      meterMode === "amp"
+                        ? "Multímetro desligado."
+                        : "Amperímetro ativo: clique em um componente."
+                    );
+                  }}
+                >
+                  <Activity size={16} />
+                  Amperímetro (A)
+                </button>
+
+                <div className="lab-cascade-sep" />
+
+                <button
+                  type="button"
+                  className="lab-cascade-item lab-cascade-danger"
+                  onClick={() => {
+                    closeAllMenus();
+                    handleReset();
+                  }}
+                >
+                  <RotateCcw size={16} />
+                  Restaurar quadro
+                </button>
+              </div>
+            ) : null}
+          </div>
+
+          {/* Painel Nuvem (abre via menu Arquivo) */}
+          {showCloud ? (
+            <div className="lab-cascade-panel lab-floating-panel">
+              <div className="lab-cascade-panel-title">
+                Circuitos na nuvem
+                <button
+                  type="button"
+                  className="lab-cascade-close"
+                  onClick={() => setShowCloud(false)}
+                >
+                  ✕
+                </button>
+              </div>
+              {cloudLoading ? (
+                <p className="lab-cascade-empty">Carregando…</p>
+              ) : !getToken() ? (
+                <p className="lab-cascade-empty">
+                  Faça login para sincronizar circuitos.
+                </p>
+              ) : cloudCircuits.length === 0 ? (
+                <p className="lab-cascade-empty">
+                  Nenhum circuito na nuvem. Use Salvar estando logado.
+                </p>
+              ) : (
+                cloudCircuits.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="lab-cascade-item"
+                    onClick={() => handleOpenCloudCircuit(item)}
+                  >
+                    <strong>{item.name || "Sem nome"}</strong>
+                    <span className="lab-cascade-meta">
+                      {item.updatedAt
+                        ? new Date(item.updatedAt).toLocaleString("pt-BR")
+                        : ""}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          ) : null}
+
+          {/* Painel Recentes (abre via menu Arquivo) */}
+          {showRecent ? (
+            <div className="lab-cascade-panel lab-floating-panel">
+              <div className="lab-cascade-panel-title">
+                Circuitos recentes
+                <button
+                  type="button"
+                  className="lab-cascade-close"
+                  onClick={() => setShowRecent(false)}
+                >
+                  ✕
+                </button>
+              </div>
+              <button
+                type="button"
+                className="lab-cascade-item lab-cascade-highlight"
+                onClick={() => {
+                  handleRestoreLastSaved();
+                  setShowRecent(false);
+                }}
+              >
+                ↩ Restaurar último auto-salvo
+              </button>
+              {recentCircuits.length === 0 ? (
+                <p className="lab-cascade-empty">
+                  Nenhum circuito recente. Salve um para aparecer aqui.
+                </p>
+              ) : (
+                recentCircuits.map((item) => (
+                  <div key={item.id + (item.savedAt || "")} className="lab-cascade-row">
+                    <button
+                      type="button"
+                      className="lab-cascade-item"
+                      style={{ flex: 1 }}
+                      onClick={() => handleOpenRecent(item)}
+                    >
+                      <strong>{item.name || "Sem nome"}</strong>
+                      <span className="lab-cascade-meta">
+                        {(item.componentCount || 0) + " comp"}
+                        {item.savedAt
+                          ? " · " +
+                            new Date(item.savedAt).toLocaleString("pt-BR")
+                          : ""}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="lab-cascade-close"
+                      title="Remover dos recentes"
+                      onClick={() => handleRemoveRecent(item.id)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))
+              )}
+              {recentCircuits.length > 0 ? (
+                <button
+                  type="button"
+                  className="lab-cascade-item"
+                  style={{ opacity: 0.7, marginTop: 4 }}
+                  onClick={handleClearRecent}
+                >
+                  Limpar lista
+                </button>
+              ) : null}
+            </div>
+          ) : null}
 
         </div>
 

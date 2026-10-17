@@ -386,8 +386,34 @@ export const EXERCISES = [
 
 
 
+/** Atividades criadas pelo professor (API) registradas em runtime */
+const remoteExercises = new Map();
+
+export function registerRemoteExercise(activity) {
+  if (!activity?.id) return null;
+  const exercise = {
+    id: activity.id,
+    title: activity.title,
+    description: activity.description || "",
+    difficulty: activity.difficulty || "Fácil",
+    points: activity.points || 100,
+    requiredTypes: activity.requiredTypes || [],
+    rules: activity.rules || {
+      mustHaveClosedCircuit: true,
+      mustEnergizeTypes: [],
+    },
+    fromApi: true,
+  };
+  remoteExercises.set(activity.id, exercise);
+  return exercise;
+}
+
 export function getExerciseById(id) {
-  return EXERCISES.find((ex) => ex.id === id) || null;
+  return (
+    EXERCISES.find((ex) => ex.id === id) ||
+    remoteExercises.get(id) ||
+    null
+  );
 }
 
 function hasType(circuit, type) {

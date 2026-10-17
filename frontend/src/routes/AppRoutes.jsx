@@ -17,6 +17,7 @@ import Exercises from "../pages/Exercises/Exercises";
 import Challenges from "../pages/Challenges/Challenges";
 import Progress from "../pages/Progress/Progress";
 import Profile from "../pages/Profile/Profile";
+import Teacher from "../pages/Teacher/Teacher";
 
 export default function AppRoutes() {
   return (
@@ -183,6 +184,11 @@ export default function AppRoutes() {
         <Route
           path="perfil"
           element={<Profile />}
+        />
+
+        <Route
+          path="professor"
+          element={<Teacher />}
         />
 
         {/* ==================================================

@@ -14,6 +14,8 @@ import {
   Zap,
 } from "lucide-react";
 
+import { useAuth } from "../../contexts/AuthContext";
+
 import "./Dashboard.css";
 
 const courses = [
@@ -88,6 +90,10 @@ const activities = [
 ];
 
 export default function Dashboard() {
+  const { user } = useAuth();
+  const firstName =
+    (user?.name || "Estudante").split(" ")[0] || "Estudante";
+
   return (
     <div className="dashboard">
       {/* CABEÇALHO */}
@@ -96,7 +102,7 @@ export default function Dashboard() {
           <span className="welcome-label">PAINEL DO ESTUDANTE</span>
 
           <h1>
-            Olá, José! <span>👋</span>
+            Olá, {firstName}! <span>👋</span>
           </h1>
 
           <p>

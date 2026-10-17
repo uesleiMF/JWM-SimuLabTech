@@ -1,13 +1,15 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
-  BookOpen,
   ClipboardCheck,
   FlaskConical,
   Target,
+  Cloud,
 } from "lucide-react";
 
 import { EXERCISES } from "../../simulator/exercises";
+import { listActivities, getToken } from "../../services/api";
 
 import "./Exercises.css";
 
@@ -17,7 +19,50 @@ const difficultyColor = {
   Difícil: "level-advanced",
 };
 
+function mapApiActivity(a) {
+  return {
+    id: a.id,
+    title: a.title,
+    description: a.description || "",
+    difficulty: a.difficulty || "Fácil",
+    points: a.points || 100,
+    requiredTypes: a.requiredTypes || [],
+    fromApi: true,
+  };
+}
+
 export default function Exercises() {
+  const [remote, setRemote] = useState([]);
+  const [loadingRemote, setLoadingRemote] = useState(false);
+
+  useEffect(() => {
+    if (!getToken()) return;
+    let cancelled = false;
+    setLoadingRemote(true);
+    listActivities({ type: "exercise" })
+      .then((data) => {
+        if (cancelled) return;
+        const list = (data?.activities || [])
+          .filter((a) => a.published !== false)
+          .map(mapApiActivity);
+        setRemote(list);
+      })
+      .catch(() => {
+        if (!cancelled) setRemote([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingRemote(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const all = [
+    ...remote,
+    ...EXERCISES.map((e) => ({ ...e, fromApi: false })),
+  ];
+
   return (
     <div className="exercises-page">
       <header className="exercises-header">
@@ -27,6 +72,9 @@ export default function Exercises() {
           <p>
             Monte os circuitos no laboratório e use o botão{" "}
             <strong>Validar</strong> para conferir se está correto.
+            {remote.length > 0
+              ? ` ${remote.length} atividade(s) do professor.`
+              : ""}
           </p>
         </div>
 
@@ -36,8 +84,14 @@ export default function Exercises() {
         </Link>
       </header>
 
+      {loadingRemote ? (
+        <p style={{ opacity: 0.7, marginBottom: 12 }}>
+          Carregando atividades do professor…
+        </p>
+      ) : null}
+
       <section className="exercises-grid">
-        {EXERCISES.map((exercise) => (
+        {all.map((exercise) => (
           <article key={exercise.id} className="exercise-card">
             <div className="exercise-card-top">
               <span
@@ -47,12 +101,15 @@ export default function Exercises() {
               >
                 {exercise.difficulty}
               </span>
-              <span className="exercise-points">
-                {exercise.points} pts
-              </span>
+              <span className="exercise-points">{exercise.points} pts</span>
             </div>
 
-            <h3>{exercise.title}</h3>
+            <h3>
+              {exercise.fromApi ? (
+                <Cloud size={14} style={{ marginRight: 6, opacity: 0.7 }} />
+              ) : null}
+              {exercise.title}
+            </h3>
             <p>{exercise.description}</p>
 
             <div className="exercise-meta">
@@ -78,15 +135,10 @@ export default function Exercises() {
       </section>
 
       <section className="exercises-tip">
-        <BookOpen size={18} />
-        <div>
-          <strong>Como funciona</strong>
-          <p>
-            1. Clique em Praticar no laboratório · 2. Monte o circuito com os
-            componentes pedidos · 3. Ligue os fios manualmente · 4. Clique em
-            Validar para ver o resultado.
-          </p>
-        </div>
+        <p>
+          Dica: no laboratório, monte o circuito e clique em{" "}
+          <strong>Validar</strong>. O progresso é salvo na sua conta.
+        </p>
       </section>
     </div>
   );

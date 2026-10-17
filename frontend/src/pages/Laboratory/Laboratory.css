@@ -144,8 +144,151 @@
 .laboratory-header-actions {
   display: flex;
   align-items: center;
+  gap: 8px;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: min(100%, 560px);
+  position: relative;
+}
+
+/* Menus em cascata (Arquivo / Ferramentas) */
+.lab-cascade {
+  position: relative;
+}
+
+.lab-cascade-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 80;
+  min-width: 220px;
+  max-width: 320px;
+  max-height: 380px;
+  overflow-y: auto;
+  border-radius: 12px;
+  border: 1px solid var(--border, #1e293b);
+  background: var(--bg-panel, #0f172a);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  padding: 6px;
+}
+
+.lab-floating-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 90;
+  width: 300px;
+}
+
+.lab-cascade-panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary, #94a3b8);
+  border-bottom: 1px solid var(--border, #1e293b);
+  margin-bottom: 4px;
+}
+
+.lab-cascade-item {
+  display: flex;
+  align-items: center;
   gap: 10px;
-  flex: 0 0 auto;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  margin: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary, #e2e8f0);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  font-family: inherit;
+}
+
+.lab-cascade-item strong {
+  display: block;
+  font-size: 13px;
+}
+
+.lab-cascade-item:hover {
+  background: var(--primary-soft, rgba(59, 130, 246, 0.15));
+}
+
+.lab-cascade-item.is-on {
+  background: var(--primary-soft, rgba(59, 130, 246, 0.2));
+  color: var(--primary, #3b82f6);
+}
+
+.lab-cascade-item.lab-cascade-highlight {
+  border: 1px solid var(--border-focus, #3b82f6);
+  background: var(--primary-soft, rgba(59, 130, 246, 0.12));
+  margin-bottom: 4px;
+}
+
+.lab-cascade-item.lab-cascade-danger:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+}
+
+.lab-cascade-sep {
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--border, #1e293b);
+}
+
+.lab-cascade-meta {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.65;
+  margin-top: 2px;
+}
+
+.lab-cascade-empty {
+  padding: 12px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary, #94a3b8);
+}
+
+.lab-cascade-close {
+  background: none;
+  border: none;
+  color: var(--text-muted, #64748b);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  line-height: 1;
+}
+
+.lab-cascade-close:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.lab-cascade-row {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+}
+
+@media (max-width: 1100px) {
+  .lab-btn-label {
+    display: none;
+  }
+
+  .laboratory-action-button {
+    padding: 0 10px;
+    min-width: 42px;
+  }
 }
 
 .laboratory-reset-button {

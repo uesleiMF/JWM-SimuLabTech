@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   BookOpen,
@@ -8,9 +9,11 @@ import {
   Trophy,
   User,
   Zap,
+  Users,
 } from "lucide-react";
 
 import { useAuth } from "../../contexts/AuthContext";
+import { joinClass, listClasses } from "../../services/api";
 
 import "./Profile.css";
 
@@ -52,6 +55,60 @@ export default function Profile() {
       .join("")
       .toUpperCase();
 
+  const roleLabel =
+    user?.role === "teacher"
+      ? "Professor"
+      : user?.role === "admin"
+        ? "Administrador"
+        : "Estudante";
+
+  const accountEyebrow =
+    user?.role === "teacher" || user?.role === "admin"
+      ? "CONTA DO PROFESSOR"
+      : "CONTA DO ALUNO";
+
+  const [joinCode, setJoinCode] = useState("");
+  const [joinMsg, setJoinMsg] = useState("");
+  const [joinErr, setJoinErr] = useState("");
+  const [myClasses, setMyClasses] = useState([]);
+  const [joining, setJoining] = useState(false);
+
+  const loadMyClasses = async () => {
+    try {
+      const data = await listClasses();
+      setMyClasses(Array.isArray(data?.classes) ? data.classes : []);
+    } catch {
+      setMyClasses([]);
+    }
+  };
+
+  useEffect(() => {
+    if (user && user.role !== "teacher" && user.role !== "admin") {
+      loadMyClasses();
+    }
+  }, [user]);
+
+  const handleJoinClass = async (e) => {
+    e.preventDefault();
+    setJoinMsg("");
+    setJoinErr("");
+    if (!joinCode.trim()) {
+      setJoinErr("Informe o código da turma.");
+      return;
+    }
+    setJoining(true);
+    try {
+      const res = await joinClass(joinCode.trim());
+      setJoinMsg(res.message || "Entrou na turma!");
+      setJoinCode("");
+      await loadMyClasses();
+    } catch (err) {
+      setJoinErr(err.message || "Não foi possível entrar na turma.");
+    } finally {
+      setJoining(false);
+    }
+  };
+
   const handleLogout = () => {
     logout();
     navigate("/login");
@@ -64,7 +121,7 @@ export default function Profile() {
       ================================================== */}
       <header className="profile-header">
         <div>
-          <span className="profile-eyebrow">CONTA DO ALUNO</span>
+          <span className="profile-eyebrow">{accountEyebrow}</span>
           <h1>Meu Perfil</h1>
           <p>
             Gerencie suas informações e acompanhe um resumo da sua jornada no
@@ -87,9 +144,7 @@ export default function Profile() {
 
               <div className="profile-role-badge">
                 <Shield size={14} />
-                <span>
-                  {user?.role === "student" ? "Estudante" : user?.role || "Estudante"}
-                </span>
+                <span>{roleLabel}</span>
               </div>
             </div>
           </div>
@@ -121,9 +176,7 @@ export default function Profile() {
               </div>
               <div>
                 <span>Tipo de conta</span>
-                <strong>
-                  {user?.role === "student" ? "Estudante" : user?.role || "Estudante"}
-                </strong>
+                <strong>{roleLabel}</strong>
               </div>
             </div>
           </div>
@@ -174,6 +227,92 @@ export default function Profile() {
             </p>
           </div>
         </section>
+
+        {/* Turmas do aluno */}
+        {user?.role !== "teacher" && user?.role !== "admin" ? (
+          <section className="profile-card" style={{ gridColumn: "1 / -1" }}>
+            <div className="profile-section-heading">
+              <span className="profile-eyebrow">TURMAS</span>
+              <h2>
+                <Users size={18} style={{ marginRight: 8 }} />
+                Minhas turmas
+              </h2>
+              <p>Entre com o código que o professor compartilhou.</p>
+            </div>
+
+            <form
+              onSubmit={handleJoinClass}
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 10,
+                marginBottom: 16,
+                alignItems: "center",
+              }}
+            >
+              <input
+                value={joinCode}
+                onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                placeholder="Ex: CIRCUITOS-A3F2"
+                style={{
+                  flex: "1 1 180px",
+                  padding: "10px 14px",
+                  borderRadius: 10,
+                  border: "1px solid var(--border, #e2e8f0)",
+                  fontSize: 14,
+                  fontFamily: "inherit",
+                }}
+              />
+              <button
+                type="submit"
+                disabled={joining}
+                style={{
+                  padding: "10px 18px",
+                  borderRadius: 10,
+                  border: "none",
+                  background: "#3b82f6",
+                  color: "#fff",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                {joining ? "Entrando…" : "Entrar na turma"}
+              </button>
+            </form>
+            {joinErr ? (
+              <p style={{ color: "#ef4444", fontWeight: 600 }}>{joinErr}</p>
+            ) : null}
+            {joinMsg ? (
+              <p style={{ color: "#16a34a", fontWeight: 600 }}>{joinMsg}</p>
+            ) : null}
+
+            {myClasses.length === 0 ? (
+              <p style={{ opacity: 0.7 }}>Você ainda não está em nenhuma turma.</p>
+            ) : (
+              <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                {myClasses.map((c) => (
+                  <li
+                    key={c.id}
+                    style={{
+                      padding: "12px 14px",
+                      borderRadius: 10,
+                      border: "1px solid var(--border, #e2e8f0)",
+                      marginBottom: 8,
+                    }}
+                  >
+                    <strong>{c.name}</strong>
+                    <div style={{ fontSize: 13, opacity: 0.75 }}>
+                      Código: {c.code}
+                      {c.teacher?.name ? ` · Prof. ${c.teacher.name}` : ""}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        ) : null}
+
       </div>
     </div>
   );

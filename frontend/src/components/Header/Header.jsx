@@ -8,11 +8,34 @@ import {
   ChevronDown,
 } from "lucide-react";
 
+import { useAuth } from "../../contexts/AuthContext";
+
 import "./Header.css";
 
+function getAvatar(user) {
+  if (user?.avatar) return String(user.avatar).slice(0, 3).toUpperCase();
+  const name = user?.name || "Aluno";
+  return name
+    .split(" ")
+    .slice(0, 2)
+    .map((p) => (p[0] || "").toUpperCase())
+    .join("");
+}
+
+function getRoleLabel(role) {
+  if (role === "teacher") return "Professor";
+  if (role === "admin") return "Admin";
+  return "Estudante";
+}
+
 export default function Header() {
+  const { user } = useAuth();
   const [mobileMenu, setMobileMenu] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
+
+  const displayName = user?.name || "Estudante";
+  const avatar = getAvatar(user);
+  const roleLabel = getRoleLabel(user?.role);
 
   const openSidebar = () => {
     window.dispatchEvent(new CustomEvent("jwm:open-sidebar"));
@@ -68,11 +91,11 @@ export default function Header() {
         </button>
 
         <div className="header-profile">
-          <div className="header-avatar">JU</div>
+          <div className="header-avatar">{avatar}</div>
 
           <div className="header-user">
-            <strong>José Ueslei</strong>
-            <span>Estudante</span>
+            <strong>{displayName}</strong>
+            <span>{roleLabel}</span>
           </div>
 
           <ChevronDown size={16} />

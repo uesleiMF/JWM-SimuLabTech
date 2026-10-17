@@ -174,6 +174,81 @@ export async function deleteRemoteCircuit(id) {
   return apiDelete(`/circuits/${id}`);
 }
 
+
+/* ---------- Turmas ---------- */
+
+export async function listClasses() {
+  return apiGet("/classes");
+}
+
+export async function getClass(id) {
+  return apiGet(`/classes/${id}`);
+}
+
+export async function createClass(payload) {
+  return apiPost("/classes", payload);
+}
+
+export async function updateClass(id, payload) {
+  return apiPut(`/classes/${id}`, payload);
+}
+
+export async function deleteClass(id) {
+  return apiDelete(`/classes/${id}`);
+}
+
+export async function joinClass(code) {
+  return apiPost("/classes/join", { code });
+}
+
+export async function removeStudentFromClass(classId, studentId) {
+  return apiDelete(`/classes/${classId}/students/${studentId}`);
+}
+
+export async function regenerateClassCode(classId) {
+  return apiPost(`/classes/${classId}/regenerate-code`, {});
+}
+
+/* ---------- Progresso dos alunos (professor) ---------- */
+
+export async function listStudentsProgress(params = {}) {
+  const q = new URLSearchParams();
+  if (params.activityId) q.set("activityId", params.activityId);
+  if (params.classId) q.set("classId", params.classId);
+  const qs = q.toString();
+  return apiGet(`/progress/students${qs ? `?${qs}` : ""}`);
+}
+
+export async function getStudentDetail(userId) {
+  return apiGet(`/progress/students/${userId}`);
+}
+
+/* ---------- Activities (professor) ---------- */
+
+export async function listActivities(params = {}) {
+  const q = new URLSearchParams();
+  if (params.type) q.set("type", params.type);
+  if (params.mine) q.set("mine", "1");
+  const qs = q.toString();
+  return apiGet(`/activities${qs ? `?${qs}` : ""}`);
+}
+
+export async function getActivity(id) {
+  return apiGet(`/activities/${id}`);
+}
+
+export async function createActivity(payload) {
+  return apiPost("/activities", payload);
+}
+
+export async function updateActivity(id, payload) {
+  return apiPut(`/activities/${id}`, payload);
+}
+
+export async function deleteActivity(id) {
+  return apiDelete(`/activities/${id}`);
+}
+
 export {
   loadProgress,
   saveProgress,
